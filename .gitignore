@@ -1,0 +1,13 @@
+
+# Secrets and env
+.env
+.env.local
+secrets/
+
+# Secrets and env
+.env
+.env.local
+secrets/
+*.json.key
+firebase-service-account.json
+.env.template

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">TicketReport</string>
+    <string name="sentry_dsn">https://ce90c84878c01eeafadc3e8852d2516a@o4511369550954496.ingest.us.sentry.io/4511369608953856</string>
+</resources>

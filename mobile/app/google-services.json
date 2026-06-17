@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "85127579675",
+    "project_id": "milba-ittech",
+    "storage_bucket": "milba-ittech.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:85127579675:android:a71152fc8f6c07405b10be",
+        "android_client_info": {
+          "package_name": "com.milba_Ittech.jobreport"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCG0Fn06AZcY05SSSzSbkJiAnIxF6CJTBM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:85127579675:android:ca136493cdd929dd5b10be",
+        "android_client_info": {
+          "package_name": "com.milba_ittech.jobreport"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCG0Fn06AZcY05SSSzSbkJiAnIxF6CJTBM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
