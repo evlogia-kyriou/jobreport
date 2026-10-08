@@ -13,3 +13,5 @@ firebase-service-account.json
 .env.template
 
 venv/
+
+*.tsbuildinfo
