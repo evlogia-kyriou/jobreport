@@ -32,7 +32,7 @@ data class TicketSignature(
 }
 
 // ─── TechnicianShift ──────────────────────────────────────────────────────────
-// Table: technician_shifts
+// Table: technician_attendance
 // Captures where technician starts their day (GPS on "Mulai Shift")
 // Used for route optimization and transport time calculation (future)
 
@@ -41,13 +41,13 @@ data class TechnicianShift(
     val id:            String  = "",
     @SerialName("technician_id")
     val technicianId:  String,
-    @SerialName("shift_date")
+    @SerialName("attendance_date")
     val shiftDate:     String,                      // "2024-05-20"
     @SerialName("start_lat")
     val startLat:      Double? = null,
     @SerialName("start_lng")
     val startLng:      Double? = null,
-    @SerialName("started_at")
+    @SerialName("clock_in_at")
     val startedAt:     String  = ""
 ) {
     val hasLocation: Boolean get() = startLat != null && startLng != null

@@ -18,6 +18,7 @@ enum class StepType(val value: String) {
     CHECKLIST_ONLY("checklist_only"),                    // is_checked only
     CHECKLIST_PHOTO("checklist_photo"),                  // is_checked + photo
     CHECKLIST_CONDITIONAL_PHOTO("checklist_conditional_photo"), // is_checked + photo if abnormal
+    PHOTO_ONLY("photo_only"),
     DYNAMIC_FINDING("dynamic_finding");                  // input_value (description) + photo
 
     companion object {
@@ -25,7 +26,7 @@ enum class StepType(val value: String) {
     }
 
     val requiresPhoto: Boolean get() = when (this) {
-        NUMERIC_FORM_PHOTO, CHECKLIST_PHOTO -> true
+        NUMERIC_FORM_PHOTO, CHECKLIST_PHOTO, PHOTO_ONLY -> true  // ← ADD PHOTO_ONLY
         else -> false
     }
 
@@ -49,10 +50,14 @@ enum class StepType(val value: String) {
 
 enum class SopSection(val value: String) {
     KEDATANGAN("kedatangan"),
+    PENGECEKAN_AC("pengecekan_ac"),        // measurements + checks ✅ NEW
+    PERSIAPAN_PENCUCIAN("persiapan_pencucian"), // MCB + PCB protection ✅ NEW
     PENCUCIAN_INDOOR("pencucian_indoor"),
     PENCUCIAN_OUTDOOR("pencucian_outdoor"),
-    PENYELESAIAN("penyelesaian"),
+    PENGECEKAN_AKHIR("pengecekan_akhir"),  // renamed from PENYELESAIAN ✅
+    DOKUMENTASI_AKHIR("dokumentasi_akhir"), // area photos ✅ NEW
     LAPORAN_KERUSAKAN("laporan_kerusakan");
+
 
     companion object {
         fun from(value: String) = entries.firstOrNull { it.value == value } ?: KEDATANGAN
@@ -100,6 +105,7 @@ data class TicketStep(
         StepType.CHECKLIST_PHOTO        -> true
         StepType.TEXT_CONDITIONAL_PHOTO,
         StepType.CHECKLIST_CONDITIONAL_PHOTO -> isConditionAbnormal
+        StepType.PHOTO_ONLY,
         StepType.DYNAMIC_FINDING        -> true
         else                            -> false
     }

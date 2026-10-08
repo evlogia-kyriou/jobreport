@@ -9,9 +9,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class TicketDetailUiState(
-    val AcUnits:            List<TicketAcUnit> = emptyList(),
-    val isLoading:          Boolean      = true,
-    val error:              String?      = null,
+    val AcUnits:   List<TicketAcUnit> = emptyList(),
+    val isLoading: Boolean            = true,
+    val error:     String?            = null,
 )
 
 class TicketDetailViewModel(
@@ -24,25 +24,46 @@ class TicketDetailViewModel(
     val isTicketComplete: StateFlow<Boolean> = _state
         .map { s ->
             s.AcUnits.isNotEmpty() &&
-                    s.AcUnits.all {
-                        // Check AppState — not AC unit status from mock
-                        AppState.isAcUnitCompleted(it.AcUnit.id)
-                    }
+                    s.AcUnits.all { AppState.isAcUnitCompleted(it.AcUnit.id) }
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
 
     fun loadTicket(ticketId: String) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
-            // ── HARDCODED FOR TESTING ──────────────────────────
-            /*val mockUnits = MockData.AcUnits.filter { it.ticketId == ticketId }
-            _state.update { it.copy(AcUnits = mockUnits, isLoading = false) }
-            // ── END HARDCODE ───────────────────────────────────*/
             try {
-                val AcUnits = ticketRepo.getTicketAcUnits(ticketId)
-                _state.update { it.copy(AcUnits = AcUnits, isLoading = false) }
+                val acUnits = ticketRepo.getTicketAcUnits(ticketId)
+                _state.update { it.copy(AcUnits = acUnits, isLoading = false) }
+
+                // Phase D: populate AppState.unitStepIds for each unit ✅
+                // Enables "all steps done" check in StepViewModel ✅
+                loadUnitStepIds(ticketId, acUnits)
+
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, error = "Gagal memuat data.") }
+            }
+        }
+    }
+
+    // ── Phase D: load step IDs per unit ──────────────────────────────────────
+    // Runs after AC units are loaded ✅
+    // Non-critical: failure is logged but does not affect ticket display ✅
+    private suspend fun loadUnitStepIds(
+        ticketId: String,
+        acUnits:  List<TicketAcUnit>
+    ) {
+        for (unit in acUnits) {
+            try {
+                val steps = ticketRepo.getStepsByAcUnit(ticketId, unit.AcUnit.id)
+                AppState.setUnitStepIds(
+                    acUnitId = unit.AcUnit.id,
+                    stepIds  = steps.map { it.id }
+                )
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "TicketDetailViewModel",
+                    "loadUnitStepIds failed for ${unit.AcUnit.id}: ${e.message}"
+                )
             }
         }
     }

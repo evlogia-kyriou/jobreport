@@ -1,12 +1,12 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.milba_Ittech.jobreport.ui.screens.ticketdetail
-import androidx.compose.runtime.derivedStateOf
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.milba_Ittech.jobreport.ui.components.AppTopBar
+import com.milba_Ittech.jobreport.ui.components.OliveTitleBlock
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -27,51 +27,41 @@ import com.milba_Ittech.jobreport.ui.theme.*
 @Composable
 fun TicketDetailScreen(
     viewModel:       TicketDetailViewModel,
-    ticketId:           String,
-    ticketTitle:        String,
-    technician:          Technician,
+    ticketId:        String,
+    ticketNumber:    String,
+    ticketType:      String,
+    scheduledTime:   String,
+    locationName:    String,
+    technician:      Technician,
     onAcUnitClick:   (String) -> Unit,
     onProceedToSign: () -> Unit,
     onBack:          () -> Unit
 ) {
-    val state by viewModel.state.collectAsState()
+    val state      by viewModel.state.collectAsState()
     val isComplete by viewModel.isTicketComplete.collectAsState()
+
+    val done  = state.AcUnits.count { AppState.isAcUnitCompleted(it.AcUnit.id) }
+    val total = state.AcUnits.size
 
     LaunchedEffect(ticketId) { viewModel.loadTicket(ticketId) }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = {
-                    Column {
-                        Text(
-                            text = ticketTitle,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        val done = state.AcUnits.count { AppState.isAcUnitCompleted(it.AcUnit.id) }
-                        val total = state.AcUnits.size
-                        Text(
-                            text = "$done dari $total AC selesai",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = NeutralMid
-                        )
-                    }
+                    OliveTitleBlock(
+                        title    = locationName,
+                        subtitle = buildSubtitle(ticketNumber, ticketType, scheduledTime)
+                    )
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
-                    }
-                }
+                onBack = onBack
             )
         },
         bottomBar = {
             if (isComplete) {
                 Surface(shadowElevation = 8.dp) {
                     Button(
-                        onClick = onProceedToSign,
+                        onClick  = onProceedToSign,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp)
@@ -99,29 +89,37 @@ fun TicketDetailScreen(
 
             else -> {
                 LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(padding)
+                    contentPadding      = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier            = Modifier.padding(padding)
                 ) {
                     // Progress bar
-                    item {
-                        val done = state.AcUnits.count { AppState.isAcUnitCompleted(it.AcUnit.id) }
-                        val total = state.AcUnits.size
-                        if (total > 0) {
+                    if (total > 0) {
+                        item {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 LinearProgressIndicator(
-                                    progress = { done.toFloat() / total.toFloat() },
-                                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                                    color = BrandSecondary,
-                                    trackColor = NeutralBorder
+                                    progress   = { done.toFloat() / total.toFloat() },
+                                    modifier   = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp),
+                                    color      = BrandSecondary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                                 Text(
-                                    "$done / $total unit selesai",
+                                    "$done / $total unit AC selesai",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = NeutralMid
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
+                    }
+
+                    // AC unit cards
+                    items(state.AcUnits, key = { it.AcUnit.id }) { unit ->
+                        AcUnitCard(
+                            unit    = unit,
+                            onClick = { onAcUnitClick(unit.AcUnit.id) }
+                        )
                     }
                 }
             }
@@ -129,67 +127,140 @@ fun TicketDetailScreen(
     }
 }
 
+
+// ── Header helpers ────────────────────────────────────────────────────────────
+
+private fun typeLabel(type: String): String = when (type) {
+    "cleaning"     -> "Cuci"
+    "service"      -> "Servis"
+    "installation" -> "Pasang"
+    else           -> type.replaceFirstChar { it.uppercase() }
+}
+
+private fun buildSubtitle(ticketNumber: String, type: String, time: String): String {
+    val timePart = if (time.isNotBlank()) {
+        val parts = time.split(":")
+        if (parts.size >= 2) "${parts[0]}:${parts[1]} WIB" else time
+    } else ""
+    return listOfNotNull(
+        ticketNumber,
+        typeLabel(type),
+        timePart.ifBlank { null }
+    ).joinToString(" · ")
+}
+
+// ── AC Unit Card ──────────────────────────────────────────────────────────────
+
 @Composable
 fun AcUnitCard(
-    unit:    TicketAcUnit,   // was AcUnit
+    unit:    TicketAcUnit,
     onClick: () -> Unit
-    // Remove: onNotFound parameter
 ) {
     val isComplete = AppState.isAcUnitCompleted(unit.AcUnit.id)
 
     Surface(
-        shape    = RoundedCornerShape(12.dp),
-        border   = BorderStroke(1.dp, if (isComplete) BrandSecondary.copy(0.4f) else NeutralBorder),
-        color    = if (isComplete) BrandSecondary.copy(0.05f) else Color.White,
-        modifier = Modifier.fillMaxWidth()
+        shape           = RoundedCornerShape(12.dp),
+        border          = BorderStroke(
+            0.5.dp,
+            if (isComplete) BrandSecondary.copy(alpha = 0.4f)
+            else            MaterialTheme.colorScheme.outlineVariant
+        ),
+        color           = if (isComplete)
+            BrandSecondary.copy(alpha = 0.06f)
+        else
+            MaterialTheme.colorScheme.surface,
+        modifier        = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
+
+            // Row 1: status icon + location in building
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 modifier          = Modifier.fillMaxWidth()
             ) {
+                // ✅ or ☐ icon
                 Icon(
                     imageVector        = if (isComplete) Icons.Default.CheckCircle
-                    else Icons.Default.RadioButtonUnchecked,
-                    contentDescription = null,
-                    tint               = if (isComplete) BrandSecondary else NeutralBorder,
-                    modifier           = Modifier.size(20.dp)
+                    else            Icons.Default.RadioButtonUnchecked,
+                    contentDescription = if (isComplete) "Selesai" else "Belum selesai",
+                    tint               = if (isComplete) BrandSecondary
+                    else            MaterialTheme.colorScheme.outlineVariant,
+                    modifier           = Modifier
+                        .size(20.dp)
+                        .padding(top = 1.dp)
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
+
                 Column(modifier = Modifier.weight(1f)) {
+                    // Location in building (primary identifier)
                     Text(
-                        text       = unit.AcUnit.displayName,     // name → displayName
-                        style      = MaterialTheme.typography.bodyLarge,
+                        text       = unit.AcUnit.displayName,
+                        style      = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color      = NeutralDark
+                        color      = if (isComplete)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        else
+                            MaterialTheme.colorScheme.onSurface
                     )
-                    val detail = listOfNotNull(
-                        unit.AcUnit.type,
-                        unit.AcUnit.capacityPk                    // brand removed, pk → capacityPk
-                    ).joinToString(" · ")
-                    if (detail.isNotEmpty()) {
-                        Text(detail, style = MaterialTheme.typography.labelSmall, color = NeutralMid)
-                    }
+
+                    Spacer(Modifier.height(2.dp))
+
+                    // AC specs
+                    Text(
+                        text  = buildSpecLine(unit),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Access notes warning (if any)
                     unit.AcUnit.accessNotes?.let { notes ->
-                        Text(
-                            "⚠ $notes",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = NeutralMid
-                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Warning,
+                                null,
+                                tint     = BrandWarning,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text  = notes,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandWarning
+                            )
+                        }
                     }
                 }
             }
 
+            // [Mulai] button — only shown when not complete
             if (!isComplete) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Button(
                     onClick  = onClick,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
                 ) {
-                    Text("Mulai")
+                    Text("Mulai", style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        null,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
-                // Remove: "Tidak Ada" OutlinedButton
             }
         }
     }
+}
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+
+private fun buildSpecLine(unit: TicketAcUnit): String {
+    return listOfNotNull(
+        unit.AcUnit.type,
+        unit.AcUnit.capacityPk,
+        unit.AcUnit.acCode
+    ).joinToString(" · ")
 }

@@ -1,42 +1,71 @@
 package com.milba_Ittech.jobreport.ui.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+// ── Color schemes ─────────────────────────────────────────────────────────────
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary          = OliveDark,        // buttons, checkboxes, toggles
+    onPrimary        = OnOlive,          // text on primary
+    primaryContainer = OliveContainer,   // light olive tint
+    onPrimaryContainer = OliveDarker,
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    secondary        = BrandSecondary,   // success / completed
+    onSecondary      = White,
+    secondaryContainer = Color(0xFFDCFCE7),
+    onSecondaryContainer = Color(0xFF14532D),
+
+    error            = BrandError,
+    onError          = White,
+
+    background       = NeutralLight,
+    onBackground     = NeutralDark,
+
+    surface          = White,
+    onSurface        = NeutralDark,
+    surfaceVariant   = SurfaceGray,
+    onSurfaceVariant = NeutralMid,
+    outline          = NeutralBorder,
+    outlineVariant   = NeutralBorder,
 )
+
+private val DarkColorScheme = darkColorScheme(
+    primary          = OliveMid,
+    onPrimary        = White,
+    primaryContainer = OliveDark,
+    onPrimaryContainer = OliveContainer,
+
+    secondary        = BrandSecondary,
+    onSecondary      = White,
+
+    error            = BrandError,
+    onError          = White,
+
+    background       = Color(0xFF0F1409),
+    onBackground     = Color(0xFFE8F0D0),
+
+    surface          = Color(0xFF1A2008),
+    onSurface        = Color(0xFFE8F0D0),
+    surfaceVariant   = Color(0xFF2D3A15),
+    onSurfaceVariant = Color(0xFFBDCB90),
+    outline          = Color(0xFF4A5A28),
+)
+
+// ── Typography ────────────────────────────────────────────────────────────────
 
 val Typography = Typography(
     displaySmall = TextStyle(
@@ -54,8 +83,18 @@ val Typography = Typography(
         fontSize   = 15.sp,
         lineHeight = 22.sp
     ),
+    bodyMedium = TextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize   = 14.sp,
+        lineHeight = 20.sp
+    ),
     bodySmall = TextStyle(
         fontWeight = FontWeight.Normal,
+        fontSize   = 13.sp,
+        lineHeight = 18.sp
+    ),
+    labelLarge = TextStyle(
+        fontWeight = FontWeight.Medium,
         fontSize   = 13.sp,
         lineHeight = 18.sp
     ),
@@ -66,26 +105,28 @@ val Typography = Typography(
     )
 )
 
+// ── Theme ─────────────────────────────────────────────────────────────────────
+
 @Composable
 fun TicketReportTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
+    content:   @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    // Set status bar color to match olive header
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            WindowCompat.getInsetsController(window, view)
+                .isAppearanceLightStatusBars = false  // white icons on dark bg
+        }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+        typography  = Typography,
+        content     = content
     )
 }

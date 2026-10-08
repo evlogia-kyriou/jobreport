@@ -9,18 +9,10 @@ import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.days
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-
-// Replaces TicketRepository.kt
-// Key changes:
-//   table: "tickets"     → "tickets"
-//   table: "ac_units" → "ticket_ac_units" JOIN "ac_units"
-//   table: "ticket_steps".ticket_id → .ticket_id
-//   table: "ticket_signatures".ticket_id → .ticket_id
-//   storage bucket: "ticket-files" → "ticket-photos"
-//   removed: finding_types, findings, location_logs, addAcUnit
 
 class TicketRepository {
 
@@ -29,7 +21,6 @@ class TicketRepository {
 
     // ── Ticket queries ────────────────────────────────────────────────────────
 
-    // Technician sees: last 7 days (submitted/approved) + upcoming (assigned/in_progress)
     suspend fun getTechnicianTickets(technicianId: String): List<WorkTicketWithDetails> {
         return try {
             client.postgrest["tickets"]
@@ -37,19 +28,21 @@ class TicketRepository {
                     id, ticket_number, project_ticket_id, type, status,
                     customer_id, location_id, technician_id,
                     scheduled_date, scheduled_time, estimated_minutes,
-                    arrival_at, departure_at, is_flagged, flag_type,
+                    arrival_at, departure_at, is_flagged,
                     submitted_at, approved_at, cancelled_at, notes,
+                    started_at, started_by,
                     project_tickets(project_number),
-                    locations(name, address, kelurahan, postal_code),
+                    locations(name, address, kelurahan, postal_code, access_regulations),
                     customers(pic_name)
                 """.trimIndent())) {
                     filter {
                         eq("technician_id", technicianId)
                         or {
-                            // Last 7 days of history
-                            gte("scheduled_date", todayMinusDays(7))
-                            // All active tickets regardless of date
-                            isIn("status", listOf("assigned", "in_progress", "submitted"))
+                            isIn("status", listOf("assigned", "in_progress"))
+                            and {
+                                eq("status", "submitted")
+                                gte("scheduled_date", todayMinusDays(7))
+                            }
                         }
                     }
                     order("scheduled_date", Order.ASCENDING)
@@ -69,10 +62,11 @@ class TicketRepository {
                     id, ticket_number, project_ticket_id, type, status,
                     customer_id, location_id, technician_id,
                     scheduled_date, scheduled_time, estimated_minutes,
-                    arrival_at, departure_at, is_flagged, flag_type,
+                    arrival_at, departure_at, is_flagged,
                     submitted_at, approved_at, cancelled_at, notes,
+                    started_at, started_by,
                     project_tickets(project_number),
-                    locations(name, address, kelurahan, postal_code),
+                    locations(name, address, kelurahan, postal_code, access_regulations),
                     customers(pic_name)
                 """.trimIndent())) {
                     filter { eq("id", ticketId) }
@@ -88,17 +82,17 @@ class TicketRepository {
 
     // ── AC unit queries ───────────────────────────────────────────────────────
 
-    // Gets AC units for a ticket via ticket_ac_units junction table
-    // Includes building_unit display_name for technician display
     suspend fun getTicketAcUnits(ticketId: String): List<TicketAcUnit> {
         return try {
             client.postgrest["ticket_ac_units"]
                 .select(Columns.raw("""
                     order_number,
+                    photo_unit_indoor_url,
+                    photo_unit_outdoor_url,
                     ac_units(
                         id, ac_code, type, capacity_pk, unit_label,
                         access_notes,
-                        building_units(display_name)
+                        building_units(floor, room, zone_label)
                     )
                 """.trimIndent())) {
                     filter { eq("ticket_id", ticketId) }
@@ -171,7 +165,17 @@ class TicketRepository {
 
     // ── Ticket status updates ─────────────────────────────────────────────────
 
-    // Step 4: Technician taps "Mulai Pekerjaan" → arrival_at recorded
+    suspend fun startTicket(ticketId: String, technicianId: String) {
+        client.postgrest["tickets"]
+            .update(buildJsonObject {
+                put("status",      "in_progress")
+                put("started_at",  Clock.System.now().toString())
+                put("started_by",  technicianId)
+            }) {
+                filter { eq("id", ticketId) }
+            }
+    }
+
     suspend fun markArrival(ticketId: String) {
         client.postgrest["tickets"]
             .update(buildJsonObject {
@@ -182,22 +186,66 @@ class TicketRepository {
             }
     }
 
-    // Step 9: Technician submits → departure_at recorded, status → submitted
     suspend fun submitTicket(ticketId: String) {
         client.postgrest["tickets"]
             .update(buildJsonObject {
                 put("departure_at", Clock.System.now().toString())
                 put("status",       "submitted")
-                // submitted_at set by DB trigger (trg_ticket_approval)
             }) {
                 filter { eq("id", ticketId) }
             }
     }
 
+    // ── Unit timing (Phase D) ─────────────────────────────────────────────────
+
+    // Record when technician opens first step for a unit ✅
+    // AppState.hasUnitStartBeenRecorded() prevents duplicate calls ✅
+    suspend fun recordUnitStarted(
+        ticketId: String,
+        acUnitId: String,
+    ) {
+        try {
+            // AppState.hasUnitStartBeenRecorded() guards against duplicate calls ✅
+            // so no isNull DB filter needed here ✅
+            client.postgrest["ticket_ac_units"]
+                .update(buildJsonObject {
+                    put("unit_started_at", Clock.System.now().toString())
+                }) {
+                    filter {
+                        eq("ticket_id",  ticketId)
+                        eq("ac_unit_id", acUnitId)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "recordUnitStarted failed: ${e.message}")
+        }
+    }
+
+    // Record when all steps for a unit are finished ✅
+    // Called from StepViewModel after markStepComplete() ✅
+    suspend fun recordUnitFinished(
+        ticketId: String,
+        acUnitId: String,
+    ) {
+        try {
+            // AppState.areAllUnitStepsDone() guards against duplicate calls ✅
+            // so no isNull DB filter needed here ✅
+            client.postgrest["ticket_ac_units"]
+                .update(buildJsonObject {
+                    put("unit_finished_at", Clock.System.now().toString())
+                }) {
+                    filter {
+                        eq("ticket_id",  ticketId)
+                        eq("ac_unit_id", acUnitId)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "recordUnitFinished failed: ${e.message}")
+        }
+    }
+
     // ── Photo upload ──────────────────────────────────────────────────────────
 
-    // Uploads step photo to Supabase Storage, returns public URL
-    // Path: photos/{ticketId}/{AcUnitId}/{stepId}.jpg
     suspend fun uploadStepPhoto(
         ticketId:   String,
         AcUnitId:   String,
@@ -212,24 +260,21 @@ class TicketRepository {
 
     // ── Signature upload + save ───────────────────────────────────────────────
 
-    // Uploads signature image, returns public URL
-    // Type: "technician" or "pic"
     suspend fun uploadSignature(
         ticketId:   String,
-        type:       String,             // "technician" | "pic"
+        type:       String,
         imageBytes: ByteArray
     ): String = withContext(Dispatchers.IO) {
         val path   = "signatures/$ticketId/$type.png"
-        val bucket = client.storage["ticket-photos"]
+        val bucket = client.storage["ticket-signatures"]
         bucket.upload(path, imageBytes) { upsert = true }
-        bucket.publicUrl(path)
+        bucket.createSignedUrl(path, 3650.days)
     }
 
-    // Saves technician signature to ticket_signatures
     suspend fun saveTechnicianSignature(
         ticketId:     String,
         technicianId: String,
-        picName:      String,           // pre-fill from customer.pic_name
+        picName:      String,
         signatureUrl: String
     ) {
         client.postgrest["ticket_signatures"].upsert(
@@ -241,18 +286,15 @@ class TicketRepository {
                 put("technician_signed_at",     Clock.System.now().toString())
             }
         ) {
-            // Upsert on ticket_id (UNIQUE constraint)
             onConflict = "ticket_id"
         }
     }
 
-    // Saves PIC signature and submits the ticket
     suspend fun savePicSignatureAndSubmit(
         ticketId:    String,
         picName:     String,
         signatureUrl: String
     ) {
-        // 1. Save PIC signature
         client.postgrest["ticket_signatures"]
             .update(buildJsonObject {
                 put("pic_name",          picName)
@@ -261,8 +303,6 @@ class TicketRepository {
             }) {
                 filter { eq("ticket_id", ticketId) }
             }
-
-        // 2. Submit the ticket
         submitTicket(ticketId)
     }
 
@@ -283,12 +323,153 @@ class TicketRepository {
         }
     }
 
+    // ── Project final signature ───────────────────────────────────────────────
+
+    suspend fun checkAllTicketsSubmitted(projectId: String): Boolean {
+        return try {
+            val rows = client.postgrest["tickets"]
+                .select(Columns.raw("id, status")) {
+                    filter { eq("project_ticket_id", projectId) }
+                }
+                .decodeList<TicketStatusRow>()
+            rows.isNotEmpty() && rows.all { it.status in listOf("submitted", "approved") }
+        } catch (e: Exception) {
+            Log.e(TAG, "checkAllTicketsSubmitted failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun saveProjectFinalSignature(
+        projectId:      String,
+        technicianId:   String,
+        picName:        String,
+        signatureBytes: ByteArray
+    ) {
+        val path   = "signatures/project/$projectId/final_pic.png"
+        val bucket = client.storage["ticket-signatures"]
+        bucket.upload(path, signatureBytes) { upsert = true }
+        val url    = bucket.createSignedUrl(path, 3650.days)
+
+        client.postgrest["project_tickets"]
+            .update(buildJsonObject {
+                put("final_pic_signature_url",       url)
+                put("final_pic_name",                picName)
+                put("final_pic_signed_at",           Clock.System.now().toString())
+                put("final_signed_collected_by",     technicianId)
+                put("status",                        "awaiting_final_signature")
+            }) {
+                filter { eq("id", projectId) }
+            }
+    }
+
+    // ── Unit identity photo upload ────────────────────────────────────────────
+
+    suspend fun uploadUnitPhoto(
+        ticketId:   String,
+        acUnitId:   String,
+        side:       String,
+        imageBytes: ByteArray
+    ): String = withContext(Dispatchers.IO) {
+        val path   = "unit-photos/$ticketId/$acUnitId/$side.jpg"
+        val bucket = client.storage["ticket-photos"]
+        bucket.upload(path, imageBytes) { upsert = true }
+        bucket.publicUrl(path)
+    }
+
+    suspend fun saveUnitPhotos(
+        ticketId:    String,
+        acUnitId:    String,
+        indoorUrl:   String,
+        outdoorUrl:  String
+    ) {
+        client.postgrest["ticket_ac_units"]
+            .update(buildJsonObject {
+                put("photo_unit_indoor_url",  indoorUrl)
+                put("photo_unit_outdoor_url", outdoorUrl)
+            }) {
+                filter {
+                    eq("ticket_id",  ticketId)
+                    eq("ac_unit_id", acUnitId)
+                }
+            }
+    }
+
+    // ── Flag unit replacement ─────────────────────────────────────────────────
+
+    suspend fun flagUnitReplacement(ticketId: String, acUnitId: String) {
+        client.postgrest["ticket_flags"].insert(
+            buildJsonObject {
+                put("ticket_id", ticketId)
+                put("flag_type", "unit_replacement")
+            }
+        )
+    }
+
+    suspend fun saveReplacementData(
+        ticketId:     String,
+        acUnitId:     String,
+        type:         String,
+        brandId:      String,
+        capacityPk:   String,
+        isNew:        Boolean,
+        mfrYear:      Int?,
+        serialNumber: String?,
+        indoorUrl:    String?,
+        outdoorUrl:   String?
+    ) {
+        client.postgrest["ticket_ac_units"]
+            .update(buildJsonObject {
+                put("replacement_type",              type)
+                put("replacement_brand_id",          brandId)
+                put("replacement_capacity_pk",       capacityPk)
+                put("replacement_is_new",            isNew)
+                if (mfrYear      != null) put("replacement_mfr_year",        mfrYear)
+                if (serialNumber != null) put("replacement_serial_number",    serialNumber)
+                if (indoorUrl    != null) put("replacement_photo_indoor_url",  indoorUrl)
+                if (outdoorUrl   != null) put("replacement_photo_outdoor_url", outdoorUrl)
+            }) {
+                filter {
+                    eq("ticket_id",  ticketId)
+                    eq("ac_unit_id", acUnitId)
+                }
+            }
+    }
+
+    // ── History tickets ───────────────────────────────────────────────────────
+
+    suspend fun getHistoryTickets(technicianId: String): List<WorkTicketWithDetails> {
+        return try {
+            client.postgrest["tickets"]
+                .select(Columns.raw("""
+                    id, ticket_number, project_ticket_id, type, status,
+                    customer_id, location_id, technician_id,
+                    scheduled_date, scheduled_time, estimated_minutes,
+                    arrival_at, departure_at, is_flagged,
+                    submitted_at, approved_at, cancelled_at, notes,
+                    started_at, started_by,
+                    project_tickets(project_number),
+                    locations(name, address, kelurahan, postal_code, access_regulations),
+                    customers(pic_name)
+                """.trimIndent())) {
+                    filter {
+                        eq("technician_id", technicianId)
+                        isIn("status", listOf("submitted", "approved"))
+                    }
+                    order("scheduled_date", Order.DESCENDING)
+                }
+                .decodeList<WorkTicketWithDetails>()
+        } catch (e: Exception) {
+            Log.e(TAG, "getHistoryTickets failed: ${e.message}")
+            emptyList()
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun todayMinusDays(days: Int): String {
-        val now      = Clock.System.now()
-        val millis   = now.toEpochMilliseconds() - (days.toLong() * 24 * 60 * 60 * 1000)
-        val instant  = kotlinx.datetime.Instant.fromEpochMilliseconds(millis)
-        return instant.toString().substring(0, 10)  // "YYYY-MM-DD"
+        val now     = Clock.System.now()
+        val millis  = now.toEpochMilliseconds() - (days.toLong() * 24 * 60 * 60 * 1000)
+        val instant = kotlinx.datetime.Instant.fromEpochMilliseconds(millis)
+        return instant.toString().substring(0, 10)
     }
 }

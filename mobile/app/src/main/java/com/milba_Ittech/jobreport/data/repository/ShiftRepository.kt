@@ -58,24 +58,24 @@ class ShiftRepository(private val context: Context) {
     // ── Shift start ───────────────────────────────────────────────────────────
 
     // Called when technician taps "Mulai Shift"
-    // Captures GPS and inserts technician_shifts record
-    // UNIQUE(technician_id, shift_date) — safe to call once per day
+    // Captures GPS and inserts technician_attendance record
+    // UNIQUE(technician_id, attendance_date) — safe to call once per day
     suspend fun startShift(technicianId: String): TechnicianShift? {
         val today    = todayString()
         val location = getCurrentLocation()
 
         return try {
-            val inserted = client.postgrest["technician_shifts"]
+            val inserted = client.postgrest["technician_attendance"]
                 .upsert(buildJsonObject {
-                    put("technician_id", technicianId)
-                    put("shift_date",    today)
-                    put("started_at",    Clock.System.now().toString())
+                    put("technician_id",   technicianId)
+                    put("attendance_date", today)
+                    put("clock_in_at",     Clock.System.now().toString())
                     if (location != null) {
                         put("start_lat", location.latitude)
                         put("start_lng", location.longitude)
                     }
                 }) {
-                    onConflict = "technician_id,shift_date"
+                    onConflict = "technician_id,attendance_date"
                 }
                 .decodeList<TechnicianShift>()
                 .firstOrNull()
@@ -93,11 +93,11 @@ class ShiftRepository(private val context: Context) {
     // Check if technician already started shift today
     suspend fun getTodayShift(technicianId: String): TechnicianShift? {
         return try {
-            client.postgrest["technician_shifts"]
+            client.postgrest["technician_attendance"]
                 .select {
                     filter {
-                        eq("technician_id", technicianId)
-                        eq("shift_date",    todayString())
+                        eq("technician_id",   technicianId)
+                        eq("attendance_date", todayString())
                     }
                     limit(1)
                 }

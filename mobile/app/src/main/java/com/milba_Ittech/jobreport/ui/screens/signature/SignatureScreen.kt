@@ -2,9 +2,13 @@ package com.milba_Ittech.jobreport.ui.screens.signature
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import com.milba_Ittech.jobreport.ui.components.AppTopBar
+import com.milba_Ittech.jobreport.ui.components.OliveTitleBlock
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,23 +16,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.filled.CheckCircle
 import com.milba_Ittech.jobreport.ui.components.SignaturePad
 import com.milba_Ittech.jobreport.ui.theme.*
 import com.milba_Ittech.jobreport.domain.model.Technician
-import java.io.ByteArrayOutputStream
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignatureScreen(
-    viewModel   : SignatureViewModel,
-    ticketId    : String,
-    technician  : Technician,
-    AcUnitCount : Int,
+    viewModel:       SignatureViewModel,
+    ticketId:        String,
+    technician:      Technician,
+    AcUnitCount:     Int,
     locationAddress: String,
-    onSubmitted : () -> Unit,
-    onBack      : () -> Unit
+    onSubmitted:     () -> Unit,
+    onBack:          () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -38,31 +39,23 @@ fun SignatureScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = {
-                    Text(
-                        if (state.step == SignatureStep.TECHNICIAN)
-                            "Tanda Tangan Teknisi"
-                        else
-                            "Tanda Tangan Klien"
+                    OliveTitleBlock(
+                        title = if (state.step == SignatureStep.TECHNICIAN)
+                            "Tanda Tangan Teknisi" else "Tanda Tangan Klien"
                     )
                 },
-                navigationIcon = {
-                    if (state.step == SignatureStep.TECHNICIAN) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
-                        }
-                    }
-                }
+                onBack = if (state.step == SignatureStep.TECHNICIAN) onBack else null
             )
         }
     ) { padding ->
         Column(
-            modifier            = Modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Completion badge
             Surface(
@@ -71,45 +64,38 @@ fun SignatureScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier          = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    modifier              = Modifier.padding(12.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        null,
-                        tint     = BrandSecondary,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Icon(Icons.Default.CheckCircle, null,
+                        tint = BrandSecondary, modifier = Modifier.size(22.dp))
                     Column {
-                        Text(
-                            text       = "Semua $AcUnitCount unit AC selesai ✅",
-                            style      = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color      = BrandSecondary
-                        )
-                        Text(
-                            text  = locationAddress,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NeutralMid
-                        )
+                        Text("Semua $AcUnitCount unit AC selesai ✅",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold, color = BrandSecondary)
+                        Text(locationAddress,
+                            style = MaterialTheme.typography.bodySmall, color = NeutralMid)
                     }
                 }
             }
 
-            // Error
-            state.error?.let {
+            // Error banner
+            state.error?.let { errorMsg ->
                 Surface(
-                    shape  = RoundedCornerShape(8.dp),
-                    color  = BrandError.copy(alpha = 0.08f),
+                    shape    = RoundedCornerShape(8.dp),
+                    color    = BrandError.copy(alpha = 0.08f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text     = it,
-                        color    = BrandError,
-                        style    = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(12.dp)
-                    )
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(errorMsg, color = BrandError,
+                            style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(
+                            onClick  = { viewModel.clearError() },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text("Coba Lagi", color = BrandError) }
+                    }
                 }
             }
 
@@ -117,32 +103,40 @@ fun SignatureScreen(
             when (state.step) {
                 SignatureStep.TECHNICIAN -> TechnicianSignatureStep(
                     technicianName = technician.name,
-                    isLoading  = state.isLoading,
-                    onSigned   = { bitmap ->
-                        val bytes = bitmapToBytes(bitmap)
+                    isLoading      = state.isLoading,
+                    onSigned       = { bitmap ->
                         viewModel.saveTechnicianSignature(
-                            ticketId        = ticketId,
-                            technicianId    = technician.id,
-                            picName         = state.picName,
-                            signatureBytes  = bytes
+                            ticketId       = ticketId,
+                            technicianId   = technician.id,
+                            picName        = state.picName,
+                            signatureBytes = bitmapToBytes(bitmap)
                         )
                     }
                 )
 
-                SignatureStep.PIC -> PicSignatureStep(
-                    picName         = state.picName,
-                    isLoading       = state.isLoading,
-                    onPicNameChange = viewModel::updatePicName,
-                    onSigned        = { bitmap ->
-                        val bytes = bitmapToBytes(bitmap)
-                        viewModel.savePicAndSubmit(
-                            ticketId        = ticketId,
-                            picName         = state.picName,
-                            signatureBytes  = bytes
-                        )
-                    },
-                    onPicUnavailable = { viewModel.proceedWithoutPic(ticketId) }
-                )
+                SignatureStep.PIC -> {
+                    // ← Hoist bitmap state to parent so it survives
+                    //   recomposition when error appears ✅
+                    var picBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+                    PicSignatureStep(
+                        picName           = state.picName,
+                        isLoading         = state.isLoading,
+                        signatureBitmap   = picBitmap,          // ← pass down ✅
+                        onSignatureChange = { picBitmap = it }, // ← lift up ✅
+                        onPicNameChange   = viewModel::updatePicName,
+                        onSigned          = {
+                            picBitmap?.let { bmp ->
+                                viewModel.savePicAndSubmit(
+                                    ticketId       = ticketId,
+                                    picName        = state.picName,
+                                    signatureBytes = bitmapToBytes(bmp)
+                                )
+                            }
+                        },
+                        onPicUnavailable  = { viewModel.proceedWithoutPic(ticketId) }
+                    )
+                }
             }
         }
     }
@@ -153,26 +147,20 @@ fun SignatureScreen(
 @Composable
 fun TechnicianSignatureStep(
     technicianName: String,
-    isLoading:  Boolean,
-    onSigned:   (Bitmap) -> Unit
+    isLoading:      Boolean,
+    onSigned:       (Bitmap) -> Unit
 ) {
     var signatureBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text  = "Teknisi: $technicianName",
+        Text("Teknisi: $technicianName",
             style = MaterialTheme.typography.bodyLarge,
-            color = NeutralDark,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text  = "Tanda tangani untuk mengkonfirmasi laporan sudah sesuai:",
-            style = MaterialTheme.typography.bodySmall,
-            color = NeutralMid
-        )
+            fontWeight = FontWeight.Medium, color = NeutralDark)
+        Text("Tanda tangani untuk mengkonfirmasi laporan sudah sesuai:",
+            style = MaterialTheme.typography.bodySmall, color = NeutralMid)
 
         SignaturePad(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(200.dp),
             onSigned = { bitmap -> signatureBitmap = bitmap },
             onClear  = { signatureBitmap = null }
         )
@@ -183,11 +171,8 @@ fun TechnicianSignatureStep(
             modifier = Modifier.fillMaxWidth().height(52.dp)
         ) {
             if (isLoading) {
-                CircularProgressIndicator(
-                    color       = Color.White,
-                    modifier    = Modifier.size(20.dp),
-                    strokeWidth = 2.dp
-                )
+                CircularProgressIndicator(color = Color.White,
+                    modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
                 Text("Menyimpan...")
             } else {
@@ -201,22 +186,24 @@ fun TechnicianSignatureStep(
 
 @Composable
 fun PicSignatureStep(
-    picName:         String,
-    isLoading:       Boolean,
-    onPicNameChange: (String) -> Unit,
-    onSigned:        (Bitmap) -> Unit,
-    onPicUnavailable: () -> Unit
+    picName:           String,
+    isLoading:         Boolean,
+    signatureBitmap:   Bitmap?,           // ← from parent (hoisted) ✅
+    onSignatureChange: (Bitmap?) -> Unit, // ← lifts back to parent ✅
+    onPicNameChange:   (String) -> Unit,
+    onSigned:          () -> Unit,
+    onPicUnavailable:  () -> Unit
 ) {
-    var signatureBitmap       by remember { mutableStateOf<Bitmap?>(null) }
+    // ← NO local signatureBitmap var — use the parameter directly ✅
     var showUnavailableDialog by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text  = "Berikan HP ini kepada PIC klien untuk ditandatangani",
+    Column(
+        modifier            = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Berikan HP ini kepada PIC klien untuk ditandatangani",
             style = MaterialTheme.typography.bodyLarge,
-            color = NeutralDark,
-            fontWeight = FontWeight.Medium
-        )
+            fontWeight = FontWeight.Medium, color = NeutralDark)
 
         OutlinedTextField(
             value         = picName,
@@ -228,24 +215,20 @@ fun PicSignatureStep(
         )
 
         SignaturePad(
-            modifier = Modifier.fillMaxWidth(),
-            onSigned = { bitmap -> signatureBitmap = bitmap },
-            onClear  = { signatureBitmap = null }
+            modifier = Modifier.fillMaxWidth().height(220.dp),
+            onSigned = { bitmap -> onSignatureChange(bitmap) }, // ← lift to parent ✅
+            onClear  = { onSignatureChange(null) }
         )
 
         Button(
-            onClick  = { signatureBitmap?.let { onSigned(it) } },
-            enabled  = signatureBitmap != null &&
-                    picName.isNotBlank() &&
-                    !isLoading,
+            onClick  = { onSigned() },
+            // ← uses PARAMETER signatureBitmap, not a local var ✅
+            enabled  = signatureBitmap != null && picName.isNotBlank() && !isLoading,
             modifier = Modifier.fillMaxWidth().height(52.dp)
         ) {
             if (isLoading) {
-                CircularProgressIndicator(
-                    color       = Color.White,
-                    modifier    = Modifier.size(20.dp),
-                    strokeWidth = 2.dp
-                )
+                CircularProgressIndicator(color = Color.White,
+                    modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
                 Text("Mengirim laporan...")
             } else {
@@ -259,6 +242,8 @@ fun PicSignatureStep(
         ) {
             Text("PIC tidak tersedia? Lanjut tanpa tanda tangan", color = NeutralMid)
         }
+
+        Spacer(Modifier.height(16.dp))
     }
 
     if (showUnavailableDialog) {
@@ -266,11 +251,9 @@ fun PicSignatureStep(
             onDismissRequest = { showUnavailableDialog = false },
             title            = { Text("Lanjut Tanpa Tanda Tangan?") },
             text             = {
-                Text(
-                    "Laporan akan dikirim tanpa tanda tangan PIC. " +
-                            "Admin akan meninjau laporan ini.",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Text("Laporan akan dikirim tanpa tanda tangan PIC. " +
+                        "Admin akan meninjau laporan ini.",
+                    style = MaterialTheme.typography.bodySmall)
             },
             confirmButton = {
                 Button(onClick = {
@@ -294,4 +277,3 @@ private fun bitmapToBytes(bitmap: Bitmap): ByteArray {
     bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
     return out.toByteArray()
 }
-

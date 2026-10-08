@@ -3,11 +3,7 @@ package com.milba_Ittech.jobreport.domain.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Replaces Ticket.kt
-// Table: tickets (work-level ticket, one technician per time slot)
-// Joined from: project_tickets, locations, customers
-
-// ─── Base work ticket (from DB) ──────────────────────────────────────────────
+// ─── Base work ticket (from DB) ───────────────────────────────────────────────
 
 @Serializable
 data class WorkTicket(
@@ -16,8 +12,8 @@ data class WorkTicket(
     val ticketNumber:        String,
     @SerialName("project_ticket_id")
     val projectTicketId:     String,
-    val type:                String,                    // cleaning | install | service
-    val status:              String  = "assigned",      // assigned | in_progress | submitted | approved | cancelled
+    val type:                String,
+    val status:              String = "assigned",
     @SerialName("customer_id")
     val customerId:          String,
     @SerialName("location_id")
@@ -25,28 +21,29 @@ data class WorkTicket(
     @SerialName("technician_id")
     val technicianId:        String,
     @SerialName("scheduled_date")
-    val scheduledDate:       String,                    // "2024-05-20"
+    val scheduledDate:       String,
     @SerialName("scheduled_time")
-    val scheduledTime:       String,                    // "08:00:00"
+    val scheduledTime:       String,
     @SerialName("estimated_minutes")
     val estimatedMinutes:    Int,
     @SerialName("arrival_at")
-    val arrivalAt:           String? = null,
+    val arrivalAt:           String?  = null,
     @SerialName("departure_at")
-    val departureAt:         String? = null,
+    val departureAt:         String?  = null,
     @SerialName("is_flagged")
-    val isFlagged:           Boolean = false,
-    @SerialName("flag_type")
-    val flagType:            String? = null,            // no_client | no_pic_signature | work_reopened
-    @SerialName("flag_notes")
-    val flagNotes:           String? = null,
+    val isFlagged:           Boolean  = false,
     @SerialName("submitted_at")
-    val submittedAt:         String? = null,
+    val submittedAt:         String?  = null,
     @SerialName("approved_at")
-    val approvedAt:          String? = null,
+    val approvedAt:          String?  = null,
     @SerialName("cancelled_at")
-    val cancelledAt:         String? = null,
-    val notes:               String? = null
+    val cancelledAt:         String?  = null,
+    val notes:               String?  = null,
+    // ── NEW: job start tracking ────────────────────────────────────────────────
+    @SerialName("started_at")
+    val startedAt:           String?  = null,   // when technician tapped "Mulai" ✅
+    @SerialName("started_by")
+    val startedBy:           String?  = null    // technician UUID ✅
 )
 
 // ─── Work ticket with joined details (for list & detail screens) ─────────────
@@ -78,8 +75,6 @@ data class WorkTicketWithDetails(
     val departureAt:         String? = null,
     @SerialName("is_flagged")
     val isFlagged:           Boolean = false,
-    @SerialName("flag_type")
-    val flagType:            String? = null,
     @SerialName("submitted_at")
     val submittedAt:         String? = null,
     @SerialName("approved_at")
@@ -87,27 +82,27 @@ data class WorkTicketWithDetails(
     @SerialName("cancelled_at")
     val cancelledAt:         String? = null,
     val notes:               String? = null,
-
-    // Joined: project_tickets
+    // ── NEW: job start tracking ────────────────────────────────────────────────
+    @SerialName("started_at")
+    val startedAt:           String? = null,    // ✅
+    @SerialName("started_by")
+    val startedBy:           String? = null,    // ✅
+    // Joined
     @SerialName("project_tickets")
-    val projectTicket:       ProjectTicketNested?  = null,
-
-    // Joined: locations
+    val projectTicket:       ProjectTicketNested? = null,
     @SerialName("locations")
-    val location:            LocationNested?       = null,
-
-    // Joined: customers
+    val location:            LocationNested?      = null,
     @SerialName("customers")
-    val customer:            CustomerNested?       = null
+    val customer:            CustomerNested?      = null
 ) {
-    // Convenience helpers
-    val locationName:  String get() = location?.name    ?: ""
-    val locationAddr:  String get() = location?.address ?: ""
+    val locationName:         String  get() = location?.name               ?: ""
+    val locationAddr:         String  get() = location?.address            ?: ""
+    val locationRegulations:  String? get() = location?.accessRegulations
     val picName:       String get() = customer?.picName ?: ""
     val projectNumber: String get() = projectTicket?.projectNumber ?: ""
 }
 
-// ─── Nested join models (Supabase foreign table expansion) ───────────────────
+// ─── Nested join models ───────────────────────────────────────────────────────
 
 @Serializable
 data class ProjectTicketNested(
@@ -117,17 +112,27 @@ data class ProjectTicketNested(
 
 @Serializable
 data class LocationNested(
-    val name:       String,
-    val address:    String,
-    val kelurahan:  String,
+    val name:      String,
+    val address:   String,
+    val kelurahan: String,
     @SerialName("postal_code")
-    val postalCode: String = ""
+    val postalCode: String = "",
+    @SerialName("access_regulations")
+    val accessRegulations: String? = null   // permanent access rules ✅
 )
 
 @Serializable
 data class CustomerNested(
     @SerialName("pic_name")
     val picName: String
+)
+
+// ─── Lightweight model for status checks ─────────────────────────────────────
+
+@Serializable
+data class TicketStatusRow(
+    val id:     String,
+    val status: String
 )
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
@@ -138,7 +143,6 @@ enum class TicketStatus(val value: String) {
     SUBMITTED("submitted"),
     APPROVED("approved"),
     CANCELLED("cancelled");
-
     companion object {
         fun from(value: String) = entries.firstOrNull { it.value == value } ?: ASSIGNED
     }
@@ -148,17 +152,18 @@ enum class TicketType(val value: String) {
     CLEANING("cleaning"),
     INSTALL("install"),
     SERVICE("service");
-
     companion object {
         fun from(value: String) = entries.firstOrNull { it.value == value } ?: CLEANING
     }
 }
 
+// ─── Flag types ───────────────────────────────────────────────────────────────
+
 enum class FlagType(val value: String) {
     NO_CLIENT("no_client"),
     NO_PIC_SIGNATURE("no_pic_signature"),
-    WORK_REOPENED("work_reopened");
-
+    WORK_REOPENED("work_reopened"),
+    UNIT_REPLACEMENT("unit_replacement");
     companion object {
         fun from(value: String?) = entries.firstOrNull { it.value == value }
     }
