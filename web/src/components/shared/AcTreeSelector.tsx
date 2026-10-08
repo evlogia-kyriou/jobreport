@@ -1,13 +1,13 @@
 import {
-import { fmtFloor, fmtRoom, fmtZona } from "@/utils/locationFormatters";
-    getAcOverdueStatus,
-    getOverdueColor,
-    getOverdueLabel,
+  getAcOverdueStatus,
+  getOverdueColor,
+  getOverdueLabel,
 } from "@/hooks/useAppSettings";
+import { fmtFloor, fmtRoom, fmtZona } from "@/utils/locationFormatters";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-const fmtPk = (val: string) => val ? `${val} PK` : "—";
+const fmtPk = (val: string) => (val ? `${val} PK` : "—");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
