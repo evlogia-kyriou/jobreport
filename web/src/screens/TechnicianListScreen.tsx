@@ -1,14 +1,16 @@
+import { EditTechnicianModal } from "@/components/shared/EditTechnicianModal";
 import { PageLayout } from "@/components/shared/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-    useDeactivateTechnician,
-    useNextTechnicianId,
-    useTechnicians,
-} from "@/hooks/useTechnicians";
+  useDeactivateTechnician,
+  useNextTechnicianId,
+  useTechnicians,
+} from "@/hooks/useTechnician";
 import { supabase } from "@/lib/supabase";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-// ── Main screen ───────────────────────────────────────────────────────────────
+const SKILL_OPTIONS = ["cleaning", "install", "service"];
 
 export function TechnicianListScreen() {
   const [search, setSearch] = useState("");
@@ -36,7 +38,6 @@ export function TechnicianListScreen() {
         </button>
       }
     >
-      {/* Search */}
       <div className="mb-4">
         <input
           type="text"
@@ -47,9 +48,7 @@ export function TechnicianListScreen() {
         />
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        {/* Header */}
         <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-slate-200 bg-slate-50">
           <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wide">
             ID
@@ -71,7 +70,6 @@ export function TechnicianListScreen() {
           </div>
         </div>
 
-        {/* Loading */}
         {isLoading && (
           <div className="p-5 space-y-3">
             {[...Array(4)].map((_, i) => (
@@ -80,7 +78,6 @@ export function TechnicianListScreen() {
           </div>
         )}
 
-        {/* Empty */}
         {!isLoading && filtered?.length === 0 && (
           <div className="p-12 text-center">
             <p className="text-slate-400 text-sm">
@@ -89,40 +86,40 @@ export function TechnicianListScreen() {
           </div>
         )}
 
-        {/* Rows */}
         {!isLoading &&
           filtered?.map((tech) => (
             <div
               key={tech.id}
               className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-slate-100 items-center hover:bg-slate-50 transition-colors"
             >
-              {/* ID */}
               <div className="col-span-1">
                 <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">
                   {tech.technician_id}
                 </span>
               </div>
 
-              {/* Name + avatar */}
+              {/* Clickable name → detail ✅ */}
               <div className="col-span-3">
-                <div className="flex items-center gap-3">
+                <Link
+                  to="/technicians/$technicianId"
+                  params={{ technicianId: tech.id }}
+                  className="flex items-center gap-3 group"
+                >
                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
                     <span className="text-sm font-semibold text-blue-600">
                       {tech.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-slate-800">
+                  <p className="text-sm font-medium text-slate-800 group-hover:text-blue-600 transition-colors">
                     {tech.name}
                   </p>
-                </div>
+                </Link>
               </div>
 
-              {/* Phone */}
               <div className="col-span-3">
                 <p className="text-sm text-slate-500">{tech.phone || "—"}</p>
               </div>
 
-              {/* Skills */}
               <div className="col-span-3">
                 <div className="flex flex-wrap gap-1">
                   {tech.skills.map((skill) => (
@@ -136,7 +133,6 @@ export function TechnicianListScreen() {
                 </div>
               </div>
 
-              {/* Status */}
               <div className="col-span-1">
                 <span
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -149,7 +145,6 @@ export function TechnicianListScreen() {
                 </span>
               </div>
 
-              {/* Action */}
               <div className="col-span-1">
                 {tech.is_active && (
                   <button
@@ -165,7 +160,6 @@ export function TechnicianListScreen() {
           ))}
       </div>
 
-      {/* Modal */}
       {showForm && (
         <AddTechnicianModal
           onClose={() => setShowForm(false)}
@@ -178,8 +172,6 @@ export function TechnicianListScreen() {
 
 // ── Add Technician Modal ──────────────────────────────────────────────────────
 
-const SKILL_OPTIONS = ["cleaning", "install", "service"];
-
 function AddTechnicianModal({
   onClose,
   onSuccess,
@@ -188,7 +180,6 @@ function AddTechnicianModal({
   onSuccess: () => void;
 }) {
   const { data: nextId } = useNextTechnicianId();
-
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [skills, setSkills] = useState<string[]>(["cleaning"]);
@@ -215,24 +206,16 @@ function AddTechnicianModal({
       setError("PIN harus tepat 6 digit.");
       return;
     }
-
     setIsLoading(true);
     setError(null);
-
     try {
-      // 1. Create auth user
-      // Note: supabase.auth.admin requires service role key.
-      // For production, use a Supabase Edge Function.
       const { data: authData, error: authError } =
         await supabase.auth.admin.createUser({
           email,
           password: pin,
           email_confirm: true,
         });
-
       if (authError) throw authError;
-
-      // 2. Insert technician profile
       const { error: profileError } = await supabase
         .from("technicians")
         .insert({
@@ -242,9 +225,7 @@ function AddTechnicianModal({
           skills,
           is_active: true,
         });
-
       if (profileError) throw profileError;
-
       onSuccess();
     } catch (err: any) {
       setError(err.message ?? "Gagal menambahkan teknisi");
@@ -267,16 +248,12 @@ function AddTechnicianModal({
             ✕
           </button>
         </div>
-
-        {/* Auto-assigned ID preview */}
         <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-5">
           <p className="text-xs text-slate-500 mb-0.5">ID Teknisi (otomatis)</p>
           <p className="font-mono font-bold text-slate-800">{technicianId}</p>
           <p className="text-xs text-slate-400 mt-0.5">Login: {email}</p>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">
               Nama Lengkap *
@@ -290,8 +267,6 @@ function AddTechnicianModal({
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
-          {/* Phone */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">
               Nomor Telepon *
@@ -305,8 +280,6 @@ function AddTechnicianModal({
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
-          {/* Skills */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">
               Keahlian *
@@ -328,8 +301,6 @@ function AddTechnicianModal({
               ))}
             </div>
           </div>
-
-          {/* PIN */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">
               PIN (6 digit) *
@@ -344,16 +315,11 @@ function AddTechnicianModal({
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
           {error && (
-            <div
-              className="bg-red-50 border border-red-200
-                                        rounded-lg px-3 py-2"
-            >
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
-
           <div className="flex gap-3 pt-2">
             <button
               type="button"

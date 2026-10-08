@@ -2,11 +2,11 @@ import { PageLayout } from "@/components/shared/PageLayout";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-    getCustomerWarningConfig,
-    getCustomerWarningLevel,
-    useAllCustomerPerformance,
-    useCustomers,
-    type CustomerPerformance,
+  getCustomerWarningConfig,
+  getCustomerWarningLevel,
+  useAllCustomerPerformance,
+  useCustomers,
+  type CustomerPerformance,
 } from "@/hooks/useCustomers";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -251,75 +251,91 @@ export function CustomerListScreen() {
               customer.phones?.[0];
 
             return (
-              <Link
+              <div
                 key={customer.id}
-                to="/customers/$customerId"
-                params={{ customerId: customer.id }}
-                className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-slate-100 hover:bg-slate-50 transition-colors items-center"
+                className="flex items-center border-b border-slate-100 hover:bg-slate-50 transition-colors"
               >
-                {/* Name */}
-                <div className="col-span-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-7 h-7 rounded-full bg-blue-100
+                {/* Row link — takes all available width */}
+                <Link
+                  to="/customers/$customerId"
+                  params={{ customerId: customer.id }}
+                  className="flex-1 grid grid-cols-12 gap-4 px-5 py-4 items-center"
+                >
+                  {/* Name */}
+                  <div className="col-span-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 rounded-full bg-blue-100
                                                     flex items-center justify-center
                                                     shrink-0"
-                    >
-                      <span className="text-xs font-semibold text-blue-600">
-                        {customer.name.charAt(0).toUpperCase()}
-                      </span>
+                      >
+                        <span className="text-xs font-semibold text-blue-600">
+                          {customer.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-800 truncate">
+                        {customer.name}
+                      </p>
                     </div>
-                    <p className="text-sm font-medium text-slate-800 truncate">
-                      {customer.name}
+                  </div>
+
+                  {/* PIC */}
+                  <div className="col-span-2">
+                    <p className="text-sm text-slate-600 truncate">
+                      {customer.pic_name}
                     </p>
                   </div>
-                </div>
 
-                {/* PIC */}
-                <div className="col-span-2">
-                  <p className="text-sm text-slate-600 truncate">
-                    {customer.pic_name}
-                  </p>
-                </div>
+                  {/* Phone */}
+                  <div className="col-span-2">
+                    <p className="text-sm text-slate-500">
+                      {primaryPhone?.phone ?? "—"}
+                    </p>
+                  </div>
 
-                {/* Phone */}
-                <div className="col-span-2">
-                  <p className="text-sm text-slate-500">
-                    {primaryPhone?.phone ?? "—"}
-                  </p>
-                </div>
-
-                {/* Type */}
-                <div className="col-span-1">
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5
+                  {/* Type */}
+                  <div className="col-span-1">
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5
                                                   rounded-full ${
                                                     customer.type === "company"
                                                       ? "bg-blue-50 text-blue-700"
                                                       : "bg-slate-100 text-slate-600"
                                                   }`}
-                  >
-                    {customer.type === "company" ? "Perusahaan" : "Perorangan"}
-                  </span>
-                </div>
+                    >
+                      {customer.type === "company"
+                        ? "Perusahaan"
+                        : "Perorangan"}
+                    </span>
+                  </div>
 
-                {/* Stage */}
-                <div className="col-span-2">
-                  <StatusBadge status={customer.stage} />
-                </div>
+                  {/* Stage */}
+                  <div className="col-span-2">
+                    <StatusBadge status={customer.stage} />
+                  </div>
 
-                {/* Source */}
-                <div className="col-span-1">
-                  <p className="text-xs text-slate-400 capitalize">
-                    {sourceLabel(customer.source)}
-                  </p>
-                </div>
+                  {/* Source */}
+                  <div className="col-span-1">
+                    <p className="text-xs text-slate-400 capitalize">
+                      {sourceLabel(customer.source)}
+                    </p>
+                  </div>
 
-                {/* Warning — Phase 19 */}
-                <div className="col-span-1">
-                  <WarningBadge kpi={perfMap[customer.id]} />
-                </div>
-              </Link>
+                  {/* Warning */}
+                  <div className="col-span-1">
+                    <WarningBadge kpi={perfMap[customer.id]} />
+                  </div>
+                </Link>
+
+                {/* Edit button — outside the row link, aligned at row end */}
+                <Link
+                  to="/customers/$customerId/edit"
+                  params={{ customerId: customer.id }}
+                  className="shrink-0 mx-3 px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 hover:text-slate-700"
+                >
+                  Edit
+                </Link>
+              </div>
             );
           })}
       </div>

@@ -1,6 +1,6 @@
 interface PageLayoutProps {
-  title: string;
-  subtitle?: string;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
   action?: React.ReactNode;
   children: React.ReactNode;
 }
@@ -12,12 +12,14 @@ export function PageLayout({
   children,
 }: PageLayoutProps) {
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+    <div className="px-8 py-7 w-full">
+      <div className="flex items-start justify-between mb-7">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">{title}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-slate-800">{title}</h1>
+          </div>
           {subtitle && (
-            <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
+            <div className="text-sm text-slate-500 mt-0.5">{subtitle}</div>
           )}
         </div>
         {action && <div>{action}</div>}

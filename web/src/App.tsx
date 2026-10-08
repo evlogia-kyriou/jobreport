@@ -43,8 +43,14 @@ const ProjectDetailScreen = lazy(() =>
 
 // Tickets
 const TicketDetailScreen = lazy(() =>
-  import("@/screens/TicketDetailScreen").then((m) => ({
-    default: m.TicketDetailScreen,
+  import("@/screens/WebTicketDetailScreen").then((m) => ({
+    default: m.WebTicketDetailScreen,
+  })),
+);
+
+const AcUnitCleaningReportScreen = lazy(() =>
+  import("@/screens/AcUnitCleaningReportScreen").then((m) => ({
+    default: m.AcUnitCleaningReportScreen,
   })),
 );
 
@@ -64,6 +70,16 @@ const CreateCustomerScreen = lazy(() =>
     default: m.CreateCustomerScreen,
   })),
 );
+const EditCustomerScreen = lazy(() =>
+  import("@/screens/EditCustomerScreen").then((m) => ({
+    default: m.EditCustomerScreen,
+  })),
+);
+const EditLocationScreen = lazy(() =>
+  import("@/screens/EditLocationScreen").then((m) => ({
+    default: m.EditLocationScreen,
+  })),
+);
 
 // Locations
 const CreateLocationScreen = lazy(() =>
@@ -71,7 +87,6 @@ const CreateLocationScreen = lazy(() =>
     default: m.CreateLocationScreen,
   })),
 );
-
 const LocationDetailScreen = lazy(() =>
   import("@/screens/LocationDetailScreen").then((m) => ({
     default: m.LocationDetailScreen,
@@ -106,8 +121,38 @@ const TechnicianListScreen = lazy(() =>
 const ReportsScreen = lazy(() =>
   import("@/screens/ReportsScreen").then((m) => ({ default: m.ReportsScreen })),
 );
-const KpiScreen = lazy(() =>
-  import("@/screens/KpiScreen").then((m) => ({ default: m.KpiScreen })),
+const ReminderScreen = lazy(() =>
+  import("@/screens/ReminderScreen").then((m) => ({
+    default: m.ReminderScreen,
+  })),
+);
+const TechnicianDetailScreen = lazy(() =>
+  import("@/screens/TechnicianDetailScreen").then((m) => ({
+    default: m.TechnicianDetailScreen,
+  })),
+);
+const TechnicianHistoryScreen = lazy(() =>
+  import("@/screens/TechnicianHistoryScreen").then((m) => ({
+    default: m.TechnicianHistoryScreen,
+  })),
+);
+const AcUnitHistoryScreen = lazy(() =>
+  import("@/screens/AcUnitHistoryScreen").then((m) => ({
+    default: m.AcUnitHistoryScreen,
+  })),
+);
+const LaporanScreen = lazy(() =>
+  import("@/screens/LaporanScreen").then((m) => ({ default: m.LaporanScreen })),
+);
+const CreateBookingRequestScreen = lazy(() =>
+  import("@/screens/CreateBookingRequestScreen").then((m) => ({
+    default: m.CreateBookingRequestScreen,
+  })),
+);
+const BookingRequestListScreen = lazy(() =>
+  import("@/screens/BookingRequestListScreen").then((m) => ({
+    default: m.BookingRequestListScreen,
+  })),
 );
 
 // Settings
@@ -137,6 +182,20 @@ function S({ children }: { children: React.ReactNode }) {
 }
 
 // ── Protected layout ──────────────────────────────────────────────────────────
+
+// ── Role guard component ──────────────────────────────────────────────────────
+function RoleGuard({
+  children,
+  allowed,
+}: {
+  children: React.ReactNode;
+  allowed: string[];
+}) {
+  const { user } = useAuthStore();
+  if (!user) return <Navigate to="/login" />;
+  if (!allowed.includes(user.role)) return <Navigate to="/dashboard" />;
+  return <>{children}</>;
+}
 
 function ProtectedLayout() {
   const { user, isInitialized, isLoading } = useAuthStore();
@@ -195,13 +254,39 @@ const projectsRoute = createRoute({
   ),
 });
 
+const bookingRequestListRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/projects/bookings",
+  component: () => (
+    <RoleGuard allowed={["admin", "admin_sales"]}>
+      <S>
+        <BookingRequestListScreen />
+      </S>
+    </RoleGuard>
+  ),
+});
+
+const createBookingRequestRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/projects/bookings/new",
+  component: () => (
+    <RoleGuard allowed={["admin", "admin_sales"]}>
+      <S>
+        <CreateBookingRequestScreen />
+      </S>
+    </RoleGuard>
+  ),
+});
+
 const createProjectRoute = createRoute({
   getParentRoute: () => protectedRoute,
-  path: "/projects/create", // ← before $projectId
+  path: "/projects/create",
   component: () => (
-    <S>
-      <CreateProjectScreen />
-    </S>
+    <RoleGuard allowed={["admin", "admin_sales"]}>
+      <S>
+        <CreateProjectScreen />
+      </S>
+    </RoleGuard>
   ),
 });
 
@@ -227,6 +312,17 @@ const ticketDetailRoute = createRoute({
   ),
 });
 
+// ← Route registered, file + export name now correct ✅
+const acUnitCleaningReportRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/tickets/$ticketId/units/$acUnitId",
+  component: () => (
+    <S>
+      <AcUnitCleaningReportScreen />
+    </S>
+  ),
+});
+
 // ── Customers ─────────────────────────────────────────────────────────────────
 
 const customersRoute = createRoute({
@@ -241,10 +337,20 @@ const customersRoute = createRoute({
 
 const createCustomerRoute = createRoute({
   getParentRoute: () => protectedRoute,
-  path: "/customers/create", // ← before $customerId
+  path: "/customers/create",
   component: () => (
     <S>
       <CreateCustomerScreen />
+    </S>
+  ),
+});
+
+const editCustomerRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/customers/$customerId/edit",
+  component: () => (
+    <S>
+      <EditCustomerScreen />
     </S>
   ),
 });
@@ -270,6 +376,7 @@ const createLocationRoute = createRoute({
     </S>
   ),
 });
+
 const locationDetailRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/customers/$customerId/locations/$locationId",
@@ -280,17 +387,17 @@ const locationDetailRoute = createRoute({
   ),
 });
 
-// ── AC Units ──────────────────────────────────────────────────────────────────
-
-const acUnitsRoute = createRoute({
+const editLocationRoute = createRoute({
   getParentRoute: () => protectedRoute,
-  path: "/ac-units",
+  path: "/customers/$customerId/locations/$locationId/edit",
   component: () => (
     <S>
-      <AcUnitListScreen />
+      <EditLocationScreen />
     </S>
   ),
 });
+
+// ── AC Units ──────────────────────────────────────────────────────────────────
 
 const acUnitDetailRoute = createRoute({
   getParentRoute: () => protectedRoute,
@@ -302,9 +409,19 @@ const acUnitDetailRoute = createRoute({
   ),
 });
 
+const acUnitHistoryRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/ac-units/$acUnitId/history",
+  component: () => (
+    <S>
+      <AcUnitHistoryScreen />
+    </S>
+  ),
+});
+
 const registerAcUnitRoute = createRoute({
   getParentRoute: () => protectedRoute,
-  path: "/ac-units/register", // ← before $acUnitId
+  path: "/ac-units/register",
   component: () => (
     <S>
       <RegisterAcUnitScreen />
@@ -324,6 +441,26 @@ const techniciansRoute = createRoute({
   ),
 });
 
+const technicianDetailRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/technicians/$technicianId",
+  component: () => (
+    <S>
+      <TechnicianDetailScreen />
+    </S>
+  ),
+});
+
+const technicianHistoryRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/technicians/$technicianId/history",
+  component: () => (
+    <S>
+      <TechnicianHistoryScreen />
+    </S>
+  ),
+});
+
 // ── Reports + KPI ─────────────────────────────────────────────────────────────
 
 const reportsRoute = createRoute({
@@ -336,17 +473,33 @@ const reportsRoute = createRoute({
   ),
 });
 
-const kpiRoute = createRoute({
+// KPI route removed ✅
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+const laporanRoute = createRoute({
   getParentRoute: () => protectedRoute,
-  path: "/technicians/$technicianId/kpi",
+  path: "/laporan",
   component: () => (
-    <S>
-      <KpiScreen />
-    </S>
+    <RoleGuard allowed={["admin", "manager", "developer"]}>
+      <S>
+        <LaporanScreen />
+      </S>
+    </RoleGuard>
   ),
 });
 
-// ── Settings ──────────────────────────────────────────────────────────────────
+const remindersRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/reminders",
+  component: () => (
+    <RoleGuard allowed={["admin", "admin_sales"]}>
+      <S>
+        <ReminderScreen />
+      </S>
+    </RoleGuard>
+  ),
+});
 
 const settingsRoute = createRoute({
   getParentRoute: () => protectedRoute,
@@ -367,25 +520,37 @@ const routeTree = rootRoute.addChildren([
     dashboardRoute,
     // Projects
     projectsRoute,
-    createProjectRoute, // ← before projectDetailRoute
+    createProjectRoute,
+    // Booking routes MUST come before projectDetailRoute ✅
+    // otherwise /projects/bookings matches /projects/$projectId
+    bookingRequestListRoute,
+    createBookingRequestRoute,
     projectDetailRoute,
-    // Tickets
-    ticketDetailRoute,
+    // Tickets — specific before general ✅
+    acUnitCleaningReportRoute, // ← /tickets/$id/units/$unitId FIRST ✅
+    ticketDetailRoute, // ← /tickets/$id SECOND ✅
     // Customers
     customersRoute,
-    createCustomerRoute, // ← before customerDetailRoute
+    createCustomerRoute,
+    editCustomerRoute,
     createLocationRoute,
+    editLocationRoute,
     locationDetailRoute,
     customerDetailRoute,
-    // AC Units
-    acUnitsRoute,
+    // AC Units — /ac-units list removed ✅
     registerAcUnitRoute,
     acUnitDetailRoute,
+    acUnitHistoryRoute,
     // Technicians
     techniciansRoute,
+    technicianDetailRoute,
+    technicianHistoryRoute,
     // Reports
     reportsRoute,
-    kpiRoute,
+    // Laporan BI
+    laporanRoute,
+    // Reminders
+    remindersRoute,
     // Settings
     settingsRoute,
   ]),

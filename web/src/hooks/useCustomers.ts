@@ -144,3 +144,66 @@ export function useAllCustomerPerformance() {
     },
   });
 }
+
+export function useDeleteCustomer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      customerId,
+      customerName,
+      reason,
+      notes,
+    }: {
+      customerId: string;
+      customerName: string;
+      reason: string;
+      notes?: string;
+    }) =>
+      customerRepository.hardDeleteCustomer(
+        customerId,
+        customerName,
+        reason,
+        notes,
+      ),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["customers"] });
+    },
+  });
+}
+
+export function useUpdateCustomer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      customerId,
+      payload,
+    }: {
+      customerId: string;
+      payload: Partial<{
+        type: string;
+        name: string;
+        pic_name: string;
+        stage: string;
+        source: string;
+        notes: string;
+      }>;
+    }) => {
+      const { error } = await supabase
+        .from("customers")
+        .update(payload)
+        .eq("id", customerId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { customerId }) => {
+      // Use refetchQueries (not invalidateQueries) to force immediate refresh
+      // regardless of the global staleTime: 30s in queryClient.ts
+      queryClient.refetchQueries({ queryKey: ["customers"] });
+      queryClient.refetchQueries({ queryKey: ["customers", customerId] });
+      queryClient.refetchQueries({
+        queryKey: ["locations", "customer", customerId],
+      });
+      queryClient.refetchQueries({ queryKey: ["location-maintenance"] });
+      queryClient.refetchQueries({ queryKey: ["projects"] });
+    },
+  });
+}

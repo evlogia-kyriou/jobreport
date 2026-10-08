@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 interface Option {
   value: string;
   label: string;
+  disabled?: boolean; // grayed out, not selectable
+  reason?: string; // shown below the label when disabled
 }
 
 interface SearchableSelectProps {
@@ -28,15 +30,12 @@ export function SearchableSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Selected label
   const selectedLabel = options.find((o) => o.value === value)?.label ?? "";
 
-  // Filtered options
   const filtered = options.filter((o) =>
     o.label.toLowerCase().includes(search.toLowerCase()),
   );
 
-  // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -51,14 +50,12 @@ export function SearchableSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Focus search input when opened
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 50);
   }, [isOpen]);
 
   function handleSelect(option: Option) {
+    if (option.disabled) return;
     onChange(option.value);
     setIsOpen(false);
     setSearch("");
@@ -114,7 +111,7 @@ export function SearchableSelect({
       {/* Dropdown */}
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
-          {/* Search input */}
+          {/* Search */}
           <div className="p-2 border-b border-slate-100">
             <input
               ref={inputRef}
@@ -126,24 +123,31 @@ export function SearchableSelect({
             />
           </div>
 
-          {/* Options list */}
-          <div className="max-h-48 overflow-y-auto">
+          {/* Options */}
+          <div className="max-h-56 overflow-y-auto">
             {filtered.length > 0 ? (
               filtered.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => handleSelect(option)}
+                  disabled={option.disabled}
                   className={cn(
                     "w-full text-left px-3 py-2 text-sm",
-                    "hover:bg-slate-50 transition-colors",
                     "border-b border-slate-50 last:border-0",
-                    option.value === value
-                      ? "bg-blue-50 text-blue-700 font-medium"
-                      : "text-slate-700",
+                    option.disabled
+                      ? "cursor-not-allowed opacity-60 bg-slate-50"
+                      : option.value === value
+                        ? "bg-blue-50 text-blue-700 font-medium"
+                        : "hover:bg-slate-50 transition-colors text-slate-700",
                   )}
                 >
-                  {option.label}
+                  <span className="block">{option.label}</span>
+                  {option.disabled && option.reason && (
+                    <span className="block text-xs text-red-400 mt-0.5">
+                      {option.reason}
+                    </span>
+                  )}
                 </button>
               ))
             ) : (

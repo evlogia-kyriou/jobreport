@@ -1,12 +1,16 @@
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
-interface AppSettings {
+export interface AppSettings {
   cleaningIntervalDays: number;
   dueSoonDays: number;
   dormantThresholdDays: number;
   sessionIdleMinutes: number;
   maxPinAttempts: number;
+  hqLat: number; // ← NEW ✅
+  hqLng: number; // ← NEW ✅
+  avgTravelSpeedKmh: number; // ← NEW ✅
+  avgMinutesPerAcUnit: number; // ← NEW ✅
 }
 
 export function useAppSettings() {
@@ -16,7 +20,6 @@ export function useAppSettings() {
       const { data, error } = await supabase
         .from("app_settings")
         .select("key, value");
-
       if (error) throw error;
 
       const map: Record<string, string> = {};
@@ -30,9 +33,13 @@ export function useAppSettings() {
         dormantThresholdDays: parseInt(map["dormant_threshold_days"] ?? "180"),
         sessionIdleMinutes: parseInt(map["session_idle_minutes"] ?? "60"),
         maxPinAttempts: parseInt(map["max_pin_attempts"] ?? "5"),
+        hqLat: parseFloat(map["hq_lat"] ?? "-6.2088"),
+        hqLng: parseFloat(map["hq_lng"] ?? "106.8456"),
+        avgTravelSpeedKmh: parseInt(map["avg_travel_speed_kmh"] ?? "20"),
+        avgMinutesPerAcUnit: parseInt(map["avg_minutes_per_ac_unit"] ?? "60"),
       };
     },
-    staleTime: 5 * 60 * 1000, // cache 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -46,11 +53,9 @@ export function getAcOverdueStatus(
   dueSoonDays: number,
 ): AcOverdueStatus {
   if (!lastCleanedAt) return "overdue";
-
   const daysSince = Math.floor(
     (Date.now() - new Date(lastCleanedAt).getTime()) / 86400000,
   );
-
   if (daysSince > cleaningIntervalDays) return "overdue";
   if (daysSince > cleaningIntervalDays - dueSoonDays) return "due_soon";
   return "ok";
@@ -65,9 +70,5 @@ export function getOverdueColor(status: AcOverdueStatus): string {
 }
 
 export function getOverdueLabel(status: AcOverdueStatus): string {
-  return {
-    ok: "OK",
-    due_soon: "Segera",
-    overdue: "Overdue",
-  }[status];
+  return { ok: "OK", due_soon: "Segera", overdue: "Overdue" }[status];
 }

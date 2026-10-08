@@ -1,422 +1,338 @@
-import { PageLayout } from "@/components/shared/PageLayout";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { supabase } from "@/lib/supabase";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { supabase } from "@/lib/supabase";
+import { PageLayout } from "@/components/shared/PageLayout";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface TicketReport {
+interface ReportTicket {
   id: string;
   ticket_number: string;
-  scheduled_date: string;
-  scheduled_time: string;
+  type: string;
   status: string;
-  is_flagged: boolean;
-  flag_type: string | null;
-  arrival_at: string | null;
-  departure_at: string | null;
+  scheduled_date: string;
   submitted_at: string | null;
   approved_at: string | null;
-  technician: { name: string; technician_id: string } | null;
+  is_flagged: boolean;
+  technician: { name: string } | null;
   location: { name: string } | null;
   customer: { name: string } | null;
-  project_ticket: { project_number: string } | null;
-  ac_units: { ac_unit_id: string }[];
+  _ac_unit_count: number;
 }
 
-// ── Fetcher ───────────────────────────────────────────────────────────────────
-
-async function fetchTicketReports(
-  from: string,
-  to: string,
-): Promise<TicketReport[]> {
-  const { data, error } = await supabase
-    .from("tickets")
-    .select(
-      `
-            id, ticket_number, scheduled_date, scheduled_time,
-            status, is_flagged, flag_type,
-            arrival_at, departure_at, submitted_at, approved_at,
-            technician:technicians!technician_id(name, technician_id),
-            location:locations!location_id(name),
-            customer:customers!customer_id(name),
-            project_ticket:project_tickets!project_ticket_id(project_number),
-            ac_units:ticket_ac_units(ac_unit_id)
-        `,
-    )
-    .in("status", ["submitted", "approved"])
-    .gte("scheduled_date", from)
-    .lte("scheduled_date", to)
-    .order("scheduled_date", { ascending: false });
-
-  if (error) throw error;
-  return (data ?? []) as unknown as TicketReport[];
+interface Technician {
+  id: string;
+  name: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getDateRange(period: string): { from: string; to: string } {
-  const now = new Date();
-  const today = now.toISOString().split("T")[0];
+function typeLabel(t: string) {
+  return (
+    { cleaning: "Cuci", service: "Servis", installation: "Pasang" }[t] ?? t
+  );
+}
 
-  switch (period) {
-    case "today": {
-      return { from: today, to: today };
-    }
-    case "week": {
-      const start = new Date(now);
-      start.setDate(now.getDate() - now.getDay());
-      return { from: start.toISOString().split("T")[0], to: today };
-    }
-    case "month": {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from: start.toISOString().split("T")[0], to: today };
-    }
-    default:
-      return { from: today, to: today };
+function statusLabel(s: string) {
+  return { submitted: "Terkirim", approved: "Disetujui" }[s] ?? s;
+}
+
+function statusColor(s: string) {
+  return s === "approved"
+    ? "bg-green-50 text-green-700 border-green-200"
+    : "bg-amber-50 text-amber-700 border-amber-200";
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+
+async function fetchReportTickets(filters: {
+  dateFrom: string;
+  dateTo: string;
+  technicianId: string;
+  status: string;
+  search: string;
+}) {
+  let q = supabase
+    .from("tickets")
+    .select(
+      `
+      id, ticket_number, type, status,
+      scheduled_date, submitted_at, approved_at, is_flagged,
+      technician:technicians!technician_id(name),
+      location:locations!location_id(name),
+      customer:customers!customer_id(name)
+    `,
+    )
+    .in("status", ["submitted", "approved"])
+    .gte("scheduled_date", filters.dateFrom)
+    .lte("scheduled_date", filters.dateTo)
+    .order("scheduled_date", { ascending: false });
+
+  if (filters.technicianId) q = q.eq("technician_id", filters.technicianId);
+  if (filters.status) q = q.eq("status", filters.status);
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  let results = (data ?? []) as unknown as ReportTicket[];
+
+  if (filters.search) {
+    const s = filters.search.toLowerCase();
+    results = results.filter(
+      (t) =>
+        t.ticket_number.toLowerCase().includes(s) ||
+        (t.location?.name ?? "").toLowerCase().includes(s) ||
+        (t.customer?.name ?? "").toLowerCase().includes(s),
+    );
   }
+  return results;
 }
 
-function calcDurationMinutes(
-  arrivalAt?: string | null,
-  departureAt?: string | null,
-): number | null {
-  if (!arrivalAt || !departureAt) return null;
-  const diff = new Date(departureAt).getTime() - new Date(arrivalAt).getTime();
-  return Math.round(diff / 60000);
+async function fetchTechnicians() {
+  const { data } = await supabase
+    .from("technicians")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("name");
+  return (data ?? []) as Technician[];
 }
 
-function formatDuration(minutes: number | null): string {
-  if (!minutes) return "—";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h > 0 ? `${h}j ${m}m` : `${m}m`;
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function today() {
+  return new Date().toISOString().split("T")[0];
+}
+function monthStart() {
+  const d = new Date();
+  d.setDate(1);
+  return d.toISOString().split("T")[0];
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 export function ReportsScreen() {
-  const [period, setPeriod] = useState("month");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [dateFrom, setDateFrom] = useState(monthStart());
+  const [dateTo, setDateTo] = useState(today());
+  const [technicianId, setTechnicianId] = useState("");
+  const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
 
-  const range =
-    fromDate && toDate ? { from: fromDate, to: toDate } : getDateRange(period);
+  const filters = useMemo(
+    () => ({
+      dateFrom,
+      dateTo,
+      technicianId,
+      status,
+      search,
+    }),
+    [dateFrom, dateTo, technicianId, status, search],
+  );
 
-  const { data: tickets, isLoading } = useQuery({
-    queryKey: ["reports", range.from, range.to],
-    queryFn: () => fetchTicketReports(range.from, range.to),
+  const { data: tickets = [], isLoading } = useQuery({
+    queryKey: ["report-tickets", filters],
+    queryFn: () => fetchReportTickets(filters),
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Summary stats
-  const totalTickets = tickets?.length ?? 0;
-  const approvedCount =
-    tickets?.filter((t) => t.status === "approved").length ?? 0;
-  const flaggedCount = tickets?.filter((t) => t.is_flagged).length ?? 0;
-  const totalAcUnits =
-    tickets?.reduce((sum, t) => sum + (t.ac_units?.length ?? 0), 0) ?? 0;
+  const { data: technicians = [] } = useQuery({
+    queryKey: ["technicians-list"],
+    queryFn: fetchTechnicians,
+    staleTime: 10 * 60 * 1000,
+  });
 
   return (
-    <PageLayout title="Laporan" subtitle="Ringkasan tiket kerja selesai">
-      {/* Period selector */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
+    <PageLayout title="Laporan" subtitle="Daftar tiket yang telah dikerjakan">
+      {/* Filters */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {/* Date from */}
+          <div>
+            <label className="text-xs text-slate-500 font-medium mb-1 block">
+              Dari tanggal
+            </label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          {/* Date to */}
+          <div>
+            <label className="text-xs text-slate-500 font-medium mb-1 block">
+              Sampai tanggal
+            </label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          {/* Technician */}
+          <div>
+            <label className="text-xs text-slate-500 font-medium mb-1 block">
+              Teknisi
+            </label>
+            <select
+              value={technicianId}
+              onChange={(e) => setTechnicianId(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option value="">Semua teknisi</option>
+              {technicians.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Status */}
+          <div>
+            <label className="text-xs text-slate-500 font-medium mb-1 block">
+              Status
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option value="">Semua status</option>
+              <option value="submitted">Terkirim</option>
+              <option value="approved">Disetujui</option>
+            </select>
+          </div>
+        </div>
+        {/* Search */}
+        <div className="mt-3">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari tiket, lokasi, atau pelanggan..."
+            className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
         {[
-          { value: "today", label: "Hari ini" },
-          { value: "week", label: "Minggu ini" },
-          { value: "month", label: "Bulan ini" },
-        ].map((p) => (
-          <button
-            key={p.value}
-            onClick={() => {
-              setPeriod(p.value);
-              setFromDate("");
-              setToDate("");
-            }}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium
-                                      transition-colors ${
-                                        period === p.value && !fromDate
-                                          ? "bg-blue-600 text-white"
-                                          : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                                      }`}
-          >
-            {p.label}
-          </button>
-        ))}
-
-        <div className="flex items-center gap-2 ml-2">
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <span className="text-slate-400 text-sm">s/d</span>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <SummaryCard
-          label="Total Tiket"
-          value={totalTickets.toString()}
-          icon="🎫"
-        />
-        <SummaryCard
-          label="Disetujui"
-          value={approvedCount.toString()}
-          icon="✅"
-        />
-        <SummaryCard
-          label="Total Unit AC"
-          value={totalAcUnits.toString()}
-          icon="❄️"
-        />
-        <SummaryCard
-          label="Bermasalah"
-          value={flaggedCount.toString()}
-          icon="🚩"
-        />
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div
-          className="flex items-center justify-between
-                                px-5 py-4 border-b border-slate-200"
-        >
-          <h2 className="font-semibold text-slate-800">Detail Tiket Kerja</h2>
-          <button
-            onClick={() => exportToCSV(tickets ?? [], range)}
-            disabled={!tickets?.length}
-            className="px-4 py-1.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50  disabled:opacity-40 transition-colors"
-          >
-            ↓ Export CSV
-          </button>
-        </div>
-
-        {/* Table header */}
-        <div
-          className="grid grid-cols-12 gap-4 px-5 py-3
-                                border-b border-slate-200 bg-slate-50"
-        >
+          { label: "Total tiket", value: tickets.length },
+          {
+            label: "Disetujui",
+            value: tickets.filter((t) => t.status === "approved").length,
+          },
+          {
+            label: "Menunggu",
+            value: tickets.filter((t) => t.status === "submitted").length,
+          },
+        ].map((s) => (
           <div
-            className="col-span-2 text-xs font-semibold
-                                    text-slate-500 uppercase tracking-wide"
+            key={s.label}
+            className="bg-white border border-slate-200 rounded-xl p-4"
           >
-            No. Tiket
-          </div>
-          <div
-            className="col-span-2 text-xs font-semibold
-                                    text-slate-500 uppercase tracking-wide"
-          >
-            Tanggal
-          </div>
-          <div
-            className="col-span-3 text-xs font-semibold
-                                    text-slate-500 uppercase tracking-wide"
-          >
-            Lokasi
-          </div>
-          <div
-            className="col-span-2 text-xs font-semibold
-                                    text-slate-500 uppercase tracking-wide"
-          >
-            Teknisi
-          </div>
-          <div
-            className="col-span-1 text-xs font-semibold
-                                    text-slate-500 uppercase tracking-wide"
-          >
-            AC
-          </div>
-          <div
-            className="col-span-1 text-xs font-semibold
-                                    text-slate-500 uppercase tracking-wide"
-          >
-            Durasi
-          </div>
-          <div
-            className="col-span-1 text-xs font-semibold
-                                    text-slate-500 uppercase tracking-wide"
-          >
-            Status
-          </div>
-        </div>
-
-        {/* Loading */}
-        {isLoading && (
-          <div className="p-5 space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full rounded-lg" />
-            ))}
-          </div>
-        )}
-
-        {/* Empty */}
-        {!isLoading && tickets?.length === 0 && (
-          <div className="p-12 text-center">
-            <p className="text-slate-400 text-sm">
-              Tidak ada tiket pada periode ini
+            <p className="text-xs text-slate-400 font-medium">{s.label}</p>
+            <p className="text-2xl font-semibold text-slate-800 mt-1">
+              {s.value}
             </p>
           </div>
-        )}
+        ))}
+      </div>
 
-        {/* Rows */}
-        {!isLoading &&
-          tickets?.map((ticket) => {
-            const durationMins = calcDurationMinutes(
-              ticket.arrival_at,
-              ticket.departure_at,
-            );
-            return (
-              <div
-                key={ticket.id}
-                className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-slate-100 items-center hover:bg-slate-50 transition-colors"
-              >
-                <div className="col-span-2">
-                  <p className="text-xs font-mono text-slate-700 truncate">
-                    {ticket.ticket_number}
-                  </p>
-                  {ticket.is_flagged && (
-                    <span className="text-xs text-red-500">
-                      🚩 {ticket.flag_type}
+      {/* Ticket list */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        {isLoading ? (
+          <div className="py-16 text-center text-slate-400 text-sm">
+            Memuat...
+          </div>
+        ) : tickets.length === 0 ? (
+          <div className="py-16 text-center text-slate-400 text-sm">
+            Tidak ada tiket untuk filter yang dipilih.
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                {[
+                  "Tiket",
+                  "Tipe",
+                  "Lokasi",
+                  "Teknisi",
+                  "Tanggal",
+                  "Status",
+                  "",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {tickets.map((t) => (
+                <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-medium text-slate-800">
+                      {t.ticket_number}
+                    </p>
+                    {t.is_flagged && (
+                      <span className="text-xs text-red-500">⚠ Temuan</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-sky-50 text-sky-700 border-sky-200">
+                      {typeLabel(t.type)}
                     </span>
-                  )}
-                </div>
-                <div className="col-span-2">
-                  <p className="text-sm text-slate-500">
-                    {ticket.scheduled_date}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {ticket.scheduled_time?.substring(0, 5)}
-                  </p>
-                </div>
-                <div className="col-span-3">
-                  <p className="text-sm text-slate-700 truncate">
-                    {ticket.location?.name ?? "—"}
-                  </p>
-                  <p className="text-xs text-slate-400 truncate">
-                    {ticket.customer?.name}
-                  </p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-sm text-slate-600 truncate">
-                    {ticket.technician?.name ?? "—"}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {ticket.technician?.technician_id}
-                  </p>
-                </div>
-                <div className="col-span-1">
-                  <p className="text-sm text-slate-600">
-                    {ticket.ac_units?.length ?? 0}
-                  </p>
-                </div>
-                <div className="col-span-1">
-                  <p className="text-sm text-slate-500">
-                    {formatDuration(durationMins)}
-                  </p>
-                </div>
-                <div className="col-span-1">
-                  <StatusBadge status={ticket.status} />
-                </div>
-              </div>
-            );
-          })}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm text-slate-700">
+                      {t.location?.name ?? "—"}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {t.customer?.name ?? "—"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {t.technician?.name ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {fmtDate(t.scheduled_date)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full border ${statusColor(t.status)}`}
+                    >
+                      {statusLabel(t.status)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/tickets/${t.id}`}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Lihat →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </PageLayout>
   );
-}
-
-// ── Sub components ────────────────────────────────────────────────────────────
-
-function SummaryCard({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: string;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-slate-500">{label}</p>
-          <p className="text-2xl font-bold text-slate-800 mt-1">{value}</p>
-        </div>
-        <span className="text-3xl">{icon}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── CSV Export ────────────────────────────────────────────────────────────────
-
-function exportToCSV(
-  tickets: TicketReport[],
-  range: { from: string; to: string },
-) {
-  const headers = [
-    "No. Tiket",
-    "No. Proyek",
-    "Tanggal",
-    "Waktu",
-    "Pelanggan",
-    "Lokasi",
-    "Teknisi",
-    "ID Teknisi",
-    "Total AC",
-    "Status",
-    "Flag",
-    "Tiba",
-    "Berangkat",
-    "Durasi (menit)",
-    "Dikirim",
-    "Disetujui",
-  ];
-
-  const rows = tickets.map((t) => {
-    const durationMins = calcDurationMinutes(t.arrival_at, t.departure_at);
-    return [
-      t.ticket_number,
-      t.project_ticket?.project_number ?? "",
-      t.scheduled_date,
-      t.scheduled_time?.substring(0, 5) ?? "",
-      t.customer?.name ?? "",
-      t.location?.name ?? "",
-      t.technician?.name ?? "",
-      t.technician?.technician_id ?? "",
-      t.ac_units?.length.toString() ?? "0",
-      t.status,
-      t.is_flagged ? (t.flag_type ?? "flagged") : "",
-      t.arrival_at ? t.arrival_at.substring(0, 16).replace("T", " ") : "",
-      t.departure_at ? t.departure_at.substring(0, 16).replace("T", " ") : "",
-      durationMins?.toString() ?? "",
-      t.submitted_at ? t.submitted_at.substring(0, 16).replace("T", " ") : "",
-      t.approved_at ? t.approved_at.substring(0, 16).replace("T", " ") : "",
-    ];
-  });
-
-  const csv = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${cell}"`).join(","))
-    .join("\n");
-
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = `laporan_tiket_${range.from}_${range.to}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
 }

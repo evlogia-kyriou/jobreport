@@ -52,7 +52,20 @@
     @apply border-border;
   }
 
+  /* ── Base font ─────────────────────────────────────────────────────────────
+     Sets 15px as the inherited base across all elements.
+     Tailwind rem-based utilities (text-sm, text-xs etc.) are unaffected
+     since they're fixed px values — this raises the floor for everything
+     that doesn't have an explicit Tailwind size class. ✅             */
+  html {
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-size: 15px;
+    line-height: 1.6;
   }
 }

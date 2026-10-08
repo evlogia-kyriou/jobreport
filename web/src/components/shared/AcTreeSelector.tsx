@@ -1,10 +1,13 @@
 import {
+import { fmtFloor, fmtRoom, fmtZona } from "@/utils/locationFormatters";
     getAcOverdueStatus,
     getOverdueColor,
     getOverdueLabel,
 } from "@/hooks/useAppSettings";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
+
+const fmtPk = (val: string) => val ? `${val} PK` : "—";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -17,7 +20,9 @@ interface AcUnitNode {
   is_active: boolean;
   building_unit?: {
     id: string;
-    display_name: string;
+    floor?: string;
+    room?: string;
+    zone_label?: string;
     floor: string | null;
     room: string;
   } | null;
@@ -122,9 +127,9 @@ export function AcTreeSelector({
       }
 
       const floorKey = ac.building_unit.floor ?? "__no_floor__";
-      const floorLabel = ac.building_unit.floor ?? "Umum";
+      const floorLabel = fmtFloor(ac.building_unit.floor ?? "Umum");
       const roomKey = ac.building_unit.id;
-      const roomLabel = ac.building_unit.display_name;
+      const roomLabel = fmtRoom(ac.building_unit.room);
 
       if (!floors[floorKey]) {
         floors[floorKey] = { label: floorLabel, rooms: {} };
@@ -282,7 +287,7 @@ export function AcTreeSelector({
                               {" · "}
                               {ac.type}
                               {" · "}
-                              {ac.capacity_pk}
+                              {fmtPk(ac.capacity_pk)}
                             </span>
                             <span className="text-xs text-slate-400 ml-2 font-mono">
                               {ac.ac_code}
@@ -337,7 +342,7 @@ export function AcTreeSelector({
                 dueSoonDays={dueSoonDays}
               />
               <span className="text-sm text-slate-700 flex-1">
-                {ac.brand?.name} · {ac.type} · {ac.capacity_pk}
+                {ac.brand?.name} · {ac.type} · {fmtPk(ac.capacity_pk)}
               </span>
               <span className="text-xs font-mono text-slate-400">
                 {ac.ac_code}

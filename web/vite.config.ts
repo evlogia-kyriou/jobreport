@@ -8,6 +8,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
 
+    optimizeDeps: {
+      include: ["@phosphor-icons/react"],
+    },
+
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

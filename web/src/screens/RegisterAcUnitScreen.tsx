@@ -5,6 +5,12 @@ import { useCustomers } from "@/hooks/useCustomers";
 import { useBuildingUnits, useLocationsByCustomer } from "@/hooks/useLocations";
 import { supabase } from "@/lib/supabase";
 import type { AcCapacity, AcType } from "@/types/app";
+import {
+  fmtBuildingUnit,
+  fmtFloor,
+  fmtRoom,
+  fmtZona,
+} from "@/utils/locationFormatters";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
@@ -20,14 +26,16 @@ const AC_TYPES: AcType[] = [
 ];
 
 const AC_CAPACITIES: AcCapacity[] = [
-  "0.5 PK",
-  "0.75 PK",
-  "1 PK",
-  "1.5 PK",
-  "2 PK",
-  "2.5 PK",
-  "3 PK",
+  "0.5",
+  "0.75",
+  "1",
+  "1.5",
+  "2",
+  "2.5",
+  "3",
 ];
+
+const fmtPk = (val: string) => `${val} PK`;
 
 // ── AC unit draft ─────────────────────────────────────────────────────────────
 
@@ -48,7 +56,7 @@ function newDraft(): AcUnitDraft {
     building_unit_id: "",
     brand_id: "",
     type: "Split",
-    capacity_pk: "1 PK",
+    capacity_pk: "1",
     unit_label: "1",
     access_notes: "",
     notes: "",
@@ -68,7 +76,12 @@ function DraftCard({
 }: {
   draft: AcUnitDraft;
   index: number;
-  buildingUnits: { id: string; display_name: string }[];
+  buildingUnits: {
+    id: string;
+    floor?: string;
+    room?: string;
+    zone_label?: string;
+  }[];
   brands: { id: string; name: string }[];
   onUpdate: (field: keyof AcUnitDraft, value: string) => void;
   onRemove: () => void;
@@ -104,7 +117,7 @@ function DraftCard({
             <option value="">Pilih ruangan...</option>
             {buildingUnits.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.display_name}
+                {fmtBuildingUnit(u.floor, u.room, u.zone_label)}
               </option>
             ))}
           </select>
@@ -160,7 +173,7 @@ function DraftCard({
           >
             {AC_CAPACITIES.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {fmtPk(c)}
               </option>
             ))}
           </select>
@@ -223,7 +236,7 @@ function DraftCard({
             {" · "}
             {draft.type}
             {" · "}
-            {draft.capacity_pk}
+            {fmtPk(draft.capacity_pk)}
             {draft.unit_label !== "1" && ` · Unit ${draft.unit_label}`}
           </p>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -536,11 +549,13 @@ export function RegisterAcUnitScreen() {
                           className="text-xs font-medium
                                                                text-slate-700"
                         >
-                          #{i + 1} · {draft.type} {draft.capacity_pk}
+                          #{i + 1} · {draft.type} {fmtPk(draft.capacity_pk)}
                         </p>
                         <p className="text-xs text-slate-400 mt-0.5">
                           {brand?.name ?? "—"}
-                          {unit ? ` · ${unit.display_name}` : ""}
+                          {unit
+                            ? ` · ${fmtBuildingUnit(unit.floor, unit.room, unit.zone_label)}`
+                            : ""}
                         </p>
                       </div>
                     );

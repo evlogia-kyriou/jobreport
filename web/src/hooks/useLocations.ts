@@ -1,6 +1,13 @@
 import { supabase } from "@/lib/supabase";
 import { locationRepository } from "@/repositories/locationRepository";
-import type { Location, LocationMaintenanceRow } from "@/types/app";
+import type {
+  KategoriFungsi,
+  Location,
+  LocationMaintenanceRow,
+  RoomName,
+  TipeBangunan,
+  TipeBangunanGroup,
+} from "@/types/app";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useLocationsByCustomer(customerId: string) {
@@ -244,5 +251,74 @@ export function useLocationMaintenanceStats() {
       };
     },
     staleTime: 60 * 1000,
+  });
+}
+
+// ── Reference table hooks ─────────────────────────────────────────────────────
+
+export function useTipeBangunanGroups() {
+  return useQuery({
+    queryKey: ["ref", "tipe_bangunan_groups"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ref_tipe_bangunan_groups")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as TipeBangunanGroup[];
+    },
+    staleTime: 10 * 60 * 1000, // 10 min — reference data changes rarely
+  });
+}
+
+export function useTipeBangunan() {
+  return useQuery({
+    queryKey: ["ref", "tipe_bangunan"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ref_tipe_bangunan")
+        .select("*, group:ref_tipe_bangunan_groups(id, label, sort_order)")
+        .eq("is_active", true)
+        .order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as TipeBangunan[];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useKategoriFungsi() {
+  return useQuery({
+    queryKey: ["ref", "kategori_fungsi"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ref_kategori_fungsi")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as KategoriFungsi[];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useRoomNames(kategoriFungsiId?: string) {
+  return useQuery({
+    queryKey: ["ref", "room_names", kategoriFungsiId],
+    queryFn: async () => {
+      let q = supabase
+        .from("ref_room_names")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order");
+      if (kategoriFungsiId) q = q.eq("kategori_id", kategoriFungsiId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as RoomName[];
+    },
+    enabled: !!kategoriFungsiId,
+    staleTime: 10 * 60 * 1000,
   });
 }

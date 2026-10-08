@@ -7,9 +7,45 @@ export type WorkTicketStatus =
   | "approved"
   | "cancelled";
 
-export type ProjectTicketStatus = "in_progress" | "completed" | "reported";
+export type ProjectTicketStatus =
+  | "draft" // ← NEW ✅ booking being created
+  | "pending_confirm" // ← NEW ✅ awaiting customer confirmation
+  | "in_progress"
+  | "awaiting_final_signature"
+  | "completed"
+  | "reported"
+  | "ditangguhkan"
+  | "menunggu_pembatalan"
+  | "cancelled"; // ← NEW ✅
 
-export type FlagType = "no_client" | "no_pic_signature" | "work_reopened";
+export interface ProjectTicketProposedDate {
+  id: string;
+  project_ticket_id: string;
+  proposed_date: string;
+  proposed_time?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface TicketFlag {
+  id: string;
+  ticket_id: string;
+  flag_type: FlagType;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  notes: string | null;
+  is_confirmed: boolean | null; // ← NEW ✅
+  confirmed_by: string | null; // ← NEW ✅
+  confirmed_at: string | null; // ← NEW ✅
+  dismiss_reason: string | null; // ← NEW ✅
+}
+
+export type FlagType =
+  | "no_client"
+  | "no_pic_signature"
+  | "work_reopened"
+  | "unit_replacement";
 
 export type CancellationReason =
   | "pelanggan_tidak_ada"
@@ -59,6 +95,39 @@ export type LocationType =
   | "pabrik"
   | "kosan"
   | "lainnya";
+
+// ── Reference table types ────────────────────────────────────────────────────
+
+export interface TipeBangunanGroup {
+  id: string;
+  label: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface TipeBangunan {
+  id: string;
+  group_id: string;
+  label: string;
+  sort_order: number;
+  is_active: boolean;
+  group?: TipeBangunanGroup;
+}
+
+export interface KategoriFungsi {
+  id: string;
+  label: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface RoomName {
+  id: string;
+  kategori_id: string;
+  label: string;
+  sort_order: number;
+  is_active: boolean;
+}
 export type AcType =
   | "Split"
   | "Cassette"
@@ -66,16 +135,16 @@ export type AcType =
   | "Ducted"
   | "Window"
   | "Portable";
-export type AcCapacity =
-  | "0.5 PK"
-  | "0.75 PK"
-  | "1 PK"
-  | "1.5 PK"
-  | "2 PK"
-  | "2.5 PK"
-  | "3 PK";
+export type JobType = "cleaning" | "service" | "installation";
+
+export type AcCapacity = "0.5" | "0.75" | "1" | "1.5" | "2" | "2.5" | "3";
 export type ReportSentVia = "email" | "whatsapp" | "both";
-export type UserRole = "admin" | "supervisor";
+export type UserRole =
+  | "admin"
+  | "admin_technician"
+  | "admin_sales"
+  | "manager"
+  | "developer";
 export type SettingType = "int" | "text" | "boolean";
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -168,11 +237,24 @@ export interface BuildingRegistry {
 export interface Location {
   id: string;
   customer_id: string;
-  name: string; // auto-generated
+  name: string;
+  location_number?: string;
   type: LocationType;
+  tipe_bangunan_id?: string;
+  tipe_bangunan_custom?: string; // when tipe = "Lainnya"
+  kategori_fungsi_id?: string;
+  kategori_fungsi_custom?: string; // when kategori = "Lainnya"
   buildings_registry_id?: string;
   building_floor?: string;
+  // Legacy combined address (auto-rebuilt by trigger)
   address: string;
+  // Structured address fields
+  address_prefix?: string;
+  address_street?: string;
+  address_number?: string;
+  address_rt?: string;
+  address_rw?: string;
+  address_block_unit?: string;
   province: string;
   kabupaten: string;
   kecamatan: string;
@@ -180,14 +262,16 @@ export interface Location {
   postal_code: string;
   has_survey: boolean;
   survey_notes?: string;
+  access_regulations?: string; // permanent rules for technician visits ✅
   notes?: string;
   created_at: string;
   updated_at: string;
-  // joined
-  customer?: { name: string; pic_name: string };
-  building?: { name: string };
   is_active: boolean;
   ac_unit_count?: number;
+  customer?: { name: string; pic_name: string };
+  building?: { name: string };
+  tipe_bangunan?: TipeBangunan;
+  kategori_fungsi?: KategoriFungsi;
 }
 
 export interface LocationMaintenanceRow {
@@ -206,13 +290,25 @@ export interface LocationMaintenanceRow {
   days_since_service: number | null;
 }
 
+export interface Building {
+  id: string;
+  location_id: string;
+  name: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BuildingUnit {
   id: string;
   location_id: string;
-  zone?: string;
+  building_id?: string;
   floor?: string;
   room: string;
-  display_name: string; // auto-generated
+  zone_label?: string; // A, B, C... or custom
+  floor?: string;
+  room?: string;
+  zone_label?: string;
   notes?: string;
   created_at: string;
 }
@@ -252,7 +348,7 @@ export interface AcUnit {
   created_at: string;
   updated_at: string;
   // joined
-  building_unit?: { display_name: string };
+  building_unit?: { floor?: string; room?: string; zone_label?: string };
   brand?: { name: string };
 }
 
@@ -321,7 +417,6 @@ export interface WorkTicket {
   arrival_at?: string;
   departure_at?: string;
   is_flagged: boolean;
-  flag_type?: FlagType;
   flag_notes?: string;
   reopened_at?: string;
   reopened_by?: string;
@@ -438,6 +533,70 @@ export interface AcUnitWithLocation extends AcUnit {
 export interface DashboardStats {
   active_projects: number;
   submitted_tickets: number;
+  flagged_tickets: number; // submitted + is_flagged ✅
   technicians_today: number;
+  in_progress_today: number; // in_progress tickets today ✅
+  approved_today: number; // approved tickets today ✅
+  total_today: number; // total scheduled today ✅
   overdue_ac_units: number;
+}
+
+// ── Reminder tracking ─────────────────────────────────────────────────────────
+
+export type ReminderType = "cleaning_cycle" | "temuan";
+export type Phase1Status = "belum_dikirim" | "belum_terkirim" | "terkirim";
+export type Phase2Status =
+  | "menunggu_respons"
+  | "pelanggan_setuju"
+  | "pelanggan_belum_merespons"
+  | "diundur"
+  | "tidak_tertarik";
+
+export const DIUNDUR_REASONS = [
+  "Sedang renovasi",
+  "Jadwal penuh",
+  "Sedang musim liburan",
+  "Menunggu persetujuan internal",
+  "Lainnya",
+  "Tidak ada alasan",
+] as const;
+
+export const TIDAK_TERTARIK_REASONS = [
+  "Sudah pakai vendor lain",
+  "Harga tidak sesuai",
+  "Pindah lokasi/tutup",
+  "Tidak butuh sekarang",
+  "Menangani sendiri",
+  "Lainnya",
+  "Tidak ada alasan",
+] as const;
+
+export interface ReminderSend {
+  id: string;
+  reminder_type: ReminderType;
+  customer_id: string | null;
+  location_id: string | null;
+  ticket_id: string | null;
+  phase1_status: Phase1Status;
+  sent_at: string | null;
+  phase2_status: Phase2Status | null;
+  follow_up_date: string | null;
+  reason_code: string | null;
+  reason_notes: string | null;
+  responded_at: string | null; // ← NEW ✅
+  response_notes: string | null; // ← NEW ✅
+  is_dismissed: boolean;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  customer?: { name: string } | null;
+  location?: { name: string; address: string } | null;
+  ticket?: { ticket_number: string; is_flagged: boolean } | null;
+}
+
+export interface ReminderRow extends ReminderSend {
+  // Computed display fields
+  overdue_unit_count?: number;
+  last_cleaned_at?: string | null;
+  days_overdue?: number;
 }

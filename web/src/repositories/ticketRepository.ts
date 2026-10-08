@@ -2,28 +2,30 @@ import { supabase } from "@/lib/supabase";
 import type { CancellationReason, FlagType, WorkTicket } from "@/types/app";
 
 export const ticketRepository = {
-
-    async getApprovalQueue(): Promise<WorkTicket[]> {
-        const { data, error } = await supabase
-            .from("tickets")
-            .select(`
+  async getApprovalQueue(): Promise<WorkTicket[]> {
+    const { data, error } = await supabase
+      .from("tickets")
+      .select(
+        `
                 *,
                 technician:technicians!technician_id(name, technician_id),
                 location:locations!location_id(name, address),
                 customer:customers!customer_id(name, pic_name),
                 project_ticket:project_tickets!project_ticket_id(project_number)
-            `)
-            .eq("status", "submitted")
-            .order("submitted_at", { ascending: true });
+            `,
+      )
+      .eq("status", "submitted")
+      .order("submitted_at", { ascending: true });
 
-        if (error) throw error;
-        return (data ?? []) as unknown as WorkTicket[];
-    },
+    if (error) throw error;
+    return (data ?? []) as unknown as WorkTicket[];
+  },
 
-    async getTicketById(ticketId: string): Promise<WorkTicket> {
-        const { data, error } = await supabase
-            .from("tickets")
-            .select(`
+  async getTicketById(ticketId: string): Promise<WorkTicket> {
+    const { data, error } = await supabase
+      .from("tickets")
+      .select(
+        `
                 *,
                 technician:technicians!technician_id(name, technician_id),
                 location:locations!location_id(name, address),
@@ -37,75 +39,103 @@ export const ticketRepository = {
                         brand:ac_brands!brand_id(name)
                     )
                 )
-            `)
-            .eq("id", ticketId)
-            .single();
+            `,
+      )
+      .eq("id", ticketId)
+      .single();
 
-        if (error) throw error;
-        return data as unknown as WorkTicket;
-    },
+    if (error) throw error;
+    return data as unknown as WorkTicket;
+  },
 
-    async approveTicket(ticketId: string): Promise<void> {
-        const { error } = await supabase
-            .from("tickets")
-            .update({ status: "approved" })
-            .eq("id", ticketId);
+  async approveTicket(ticketId: string): Promise<void> {
+    const { error } = await supabase
+      .from("tickets")
+      .update({
+        status: "approved",
+        approved_at: new Date().toISOString(),
+      })
+      .eq("id", ticketId);
 
-        if (error) throw error;
-    },
+    if (error) throw error;
+  },
 
-    async cancelTicket(
-        ticketId: string,
-        cancellationReason: CancellationReason,
-        cancellationNotes?: string,
-    ): Promise<void> {
-        const { error } = await supabase
-            .from("tickets")
-            .update({
-                status: "cancelled",
-                cancellation_reason: cancellationReason,
-                cancellation_notes: cancellationNotes,
-            })
-            .eq("id", ticketId);
+  async cancelTicket(
+    ticketId: string,
+    cancellationReason: CancellationReason,
+    cancellationNotes?: string,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("tickets")
+      .update({
+        status: "cancelled",
+        cancellation_reason: cancellationReason,
+        cancellation_notes: cancellationNotes,
+      })
+      .eq("id", ticketId);
 
-        if (error) throw error;
-    },
+    if (error) throw error;
+  },
 
-    async approveWithFlag(
-        ticketId: string,
-        flagType: FlagType,
-        flagNotes: string,
-    ): Promise<void> {
-        const { error } = await supabase
-            .from("tickets")
-            .update({
-                status: "approved",
-                is_flagged: true,
-                flag_type: flagType,
-                flag_notes: flagNotes,
-            })
-            .eq("id", ticketId);
+  async approveWithFlag(
+    ticketId: string,
+    flagType: FlagType,
+    flagNotes: string,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("tickets")
+      .update({
+        status: "approved",
+        approved_at: new Date().toISOString(),
+        is_flagged: true,
+        flag_type: flagType,
+        flag_notes: flagNotes,
+      })
+      .eq("id", ticketId);
 
-        if (error) throw error;
-    },
+    if (error) throw error;
+  },
 
-    async reopenTicket(
-        ticketId: string,
-        reopenReason: string,
-        reopenedBy: string,
-    ): Promise<void> {
-        const { error } = await supabase
-            .from("tickets")
-            .update({
-                status: "in_progress",
-                is_flagged: true,
-                flag_type: "work_reopened",
-                reopen_reason: reopenReason,
-                reopened_by: reopenedBy,
-                reopened_at: new Date().toISOString(),
-            })
-            .eq("id", ticketId);
+  async reopenTicket(
+    ticketId: string,
+    reopenReason: string,
+    reopenedBy: string,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("tickets")
+      .update({
+        status: "in_progress",
+        is_flagged: true,
+        flag_type: "work_reopened",
+        reopen_reason: reopenReason,
+        reopened_by: reopenedBy,
+        reopened_at: new Date().toISOString(),
+      })
+      .eq("id", ticketId);
 
-        if (error) throw error;
-    },
+    if (error) throw error;
+  },
+
+  // Returns all non-cancelled tickets on a given date.
+  // Used by CreateProjectScreen to check technician availability.
+  async getScheduleByDate(date: string): Promise<
+    {
+      technician_id: string;
+      scheduled_time: string;
+      estimated_minutes: number;
+    }[]
+  > {
+    const { data, error } = await supabase
+      .from("tickets")
+      .select("technician_id, scheduled_time, estimated_minutes")
+      .eq("scheduled_date", date)
+      .neq("status", "cancelled");
+
+    if (error) throw error;
+    return (data ?? []) as {
+      technician_id: string;
+      scheduled_time: string;
+      estimated_minutes: number;
+    }[];
+  },
 };
