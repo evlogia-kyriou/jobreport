@@ -6,12 +6,11 @@ uvicorn[standard]==0.29.0
 python-dotenv==1.0.1
 
 # Authentication
-PyJWT==2.8.0
+PyJWT==2.12.1
 cryptography==42.0.5
 
 # Supabase
 supabase==2.30.0
-websockets==13.1
 
 # PDF Generation
 reportlab==4.1.0
@@ -28,7 +27,7 @@ sentry-sdk[fastapi]==2.3.1
 slowapi==0.1.9
 
 # Validation
-pydantic==2.7.1
+pydantic==2.13.4
 pydantic-settings==2.2.1
 
 # Scheduling (KPI computation)
