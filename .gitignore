@@ -15,3 +15,6 @@ firebase-service-account.json
 venv/
 
 *.tsbuildinfo
+
+__pycache__/
+*.pyc
